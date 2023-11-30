@@ -12,6 +12,8 @@ Featuring:
 
 This is *NOT* intended to be a "framework" or "library" - it is intended to show off what kind of performance you can get with native PyTorch :) Please copy-paste and fork as you desire.
 
+For an in-depth walkthrough of what's in this codebase, see this [blog post](https://pytorch.org/blog/accelerating-generative-ai-2/).
+
 ## Installation
 [Download PyTorch nightly](https://pytorch.org/get-started/locally/)
 Install sentencepiece and huggingface_hub
@@ -57,7 +59,16 @@ Benchmarks run on an A100-80GB, power limited to 330W.
 [Verifier: Llama-70B (int4), Draft: Llama-7B (int4)](./scripts/speculate_70B_int4.sh): 48.4 tok/s
 
 ### Tensor Parallelism
-Benchmark numbers to be added...
+| Model    | Number of GPUs | Tokens/Second | Memory Bandwidth (GB/s) |
+| -------- | ------- | ------ | ------ |
+| Llama-2-7B  | 1    |  104.9  | 1397.31 |
+|           | 2   | 136.27   | 954.01 |
+|           | 4   | 168.78   | 635.09 |
+|           | 8   | 179.27   | 395.85 |
+| Llama-2-70B  | 1    |  OOM  |  |
+|           | 2   | 20.53   | 1426.41 |
+|           | 4   | 34.15   | 1204.62 |
+|           | 8   | 47.25   | 858.28 |
 
 ### AMD
 Benchmarks run on one GCD of a MI-250x.
