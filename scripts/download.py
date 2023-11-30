@@ -10,10 +10,17 @@ from pathlib import Path
 from typing import Optional
 
 def hf_download(repo_id: Optional[str] = None, hf_token: Optional[str] = None) -> None:
-    from huggingface_hub import snapshot_download
+    from huggingface_hub import HfApi, hf_hub_download
     os.makedirs(f"checkpoints/{repo_id}", exist_ok=True)
     try:
-        snapshot_download(repo_id, local_dir=f"checkpoints/{repo_id}", local_dir_use_symlinks=False, token=hf_token)
+        api = HfApi()
+        repo_files = api.list_repo_files(repo_id, token=hf_token)
+
+        for file in repo_files:
+            if not file.endswith('.safetensors'):
+                print(f"Downloading {file}...")
+                hf_hub_download(repo_id, filename=file, cache_dir=f"checkpoints/{repo_id}", use_auth_token=hf_token)
+                
     except HTTPError as e:
         if e.response.status_code == 401:
             print("You need to pass a valid `--hf_token=...` to download private checkpoints.")
