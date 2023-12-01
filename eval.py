@@ -117,7 +117,7 @@ class SimpleGPTEvalWrapper(lm_eval.base.BaseLM):
 
     def tok_encode(self, string: str):
         encoded = encode_tokens(self._tokenizer,
-            string, bos=True, eos=False, device=self._device)
+            string, bos=True, device=self._device)
         # encoded is a pytorch tensor, but some internal logic in the
         # eval harness expects it to be a list instead
         # TODO: verify this for multi-batch as well
