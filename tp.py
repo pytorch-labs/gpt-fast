@@ -11,7 +11,7 @@ from torch import nn
 import torch.distributed as dist
 from torch.distributed import _functional_collectives as funcol
 from model import Transformer, Attention, FeedForward
-from quantize import WeightOnlyInt4Linear, WeightOnlyInt8Linear
+from quantize import WeightOnlyInt4Linear
 
 
 def _get_rank() -> int:

@@ -5,7 +5,6 @@
 # LICENSE file in the root directory of this source tree.
 import importlib
 import time
-from math import ceil
 from pathlib import Path
 
 import torch
