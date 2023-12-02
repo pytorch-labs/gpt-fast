@@ -3,15 +3,16 @@
 
 # This source code is licensed under the license found in the
 # LICENSE file in the root directory of this source tree.
+import itertools
 import sys
 import time
 from pathlib import Path
 from typing import Optional, Tuple
-import itertools
-import torch
 
-import torch._inductor.config
+import torch
 import torch._dynamo.config
+import torch._inductor.config
+
 torch._inductor.config.coordinate_descent_tuning = True
 torch._inductor.config.triton.unique_kernel_names = True
 torch._inductor.config.fx_graph_cache = True # Experimental feature to reduce compilation times, will be on by default in future
@@ -21,9 +22,11 @@ torch._inductor.config.fx_graph_cache = True # Experimental feature to reduce co
 wd = Path(__file__).parent.parent.resolve()
 sys.path.append(str(wd))
 
+from sentencepiece import SentencePieceProcessor
+
 from model import Transformer
 from tp import maybe_init_dist
-from sentencepiece import SentencePieceProcessor
+
 
 def multinomial_sample_one_no_sync(probs_sort): # Does multinomial sampling without a cuda synchronization
     q = torch.empty_like(probs_sort).exponential_(1)

@@ -3,14 +3,16 @@
 
 # This source code is licensed under the license found in the
 # LICENSE file in the root directory of this source tree.
+import os
+import sys
+
 import torch
-import os, sys
+
 lm_evaluation_harness_path = "/".join(
     os.getcwd().split("/")[:-1] + ["lm-evaluation-harness"]
 )
 sys.path.insert(0, lm_evaluation_harness_path)
 import main as lm_evaluation_harness_main
-
 import torch.fx as fx
 import torch.nn as nn
 import torch.nn.functional as F

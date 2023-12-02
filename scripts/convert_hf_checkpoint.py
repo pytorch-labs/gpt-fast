@@ -4,18 +4,19 @@
 # This source code is licensed under the license found in the
 # LICENSE file in the root directory of this source tree.
 import json
+import re
 import sys
 from pathlib import Path
 from typing import Optional
 
 import torch
-import re
 
 # support running without installing as a package
 wd = Path(__file__).parent.parent.resolve()
 sys.path.append(str(wd))
 
 from model import ModelArgs
+
 
 @torch.inference_mode()
 def convert_hf_checkpoint(
