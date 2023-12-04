@@ -9,9 +9,9 @@ from pathlib import Path
 from typing import Optional
 
 import torch
-
-import torch._inductor.config
 import torch._dynamo.config
+import torch._inductor.config
+
 torch._dynamo.config.automatic_dynamic_shapes = True
 torch._inductor.config.triton.unique_kernel_names = True
 torch._inductor.config.epilogue_fusion = False
@@ -22,23 +22,21 @@ torch._dynamo.config.cache_size_limit = 100000
 wd = Path(__file__).parent.parent.resolve()
 sys.path.append(str(wd))
 
-from model import LLaMA
-from sentencepiece import SentencePieceProcessor
-
 # hacky path setup for lm-evaluation-harness
 import os
 import sys
+
+from sentencepiece import SentencePieceProcessor
+
+from model import LLaMA
+
 lm_evaluation_harness_path = '/'.join(
     os.getcwd().split('/')[:-1] + ['lm-evaluation-harness'])
 sys.path.insert(0, lm_evaluation_harness_path)
-import main as lm_evaluation_harness_main
 import lm_eval
+import main as lm_evaluation_harness_main
 
-from generate import (
-    _load_model,
-    encode_tokens,
-    model_forward,
-)
+from generate import _load_model, encode_tokens, model_forward
 
 
 def setup_cache_padded_seq_input_pos_max_seq_length_for_prefill(

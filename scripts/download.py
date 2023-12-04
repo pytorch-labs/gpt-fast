@@ -4,10 +4,10 @@
 # This source code is licensed under the license found in the
 # LICENSE file in the root directory of this source tree.
 import os
-from requests.exceptions import HTTPError
-import sys
-from pathlib import Path
 from typing import Optional
+
+from requests.exceptions import HTTPError
+
 
 def hf_download(repo_id: Optional[str] = None, hf_token: Optional[str] = None) -> None:
     from huggingface_hub import snapshot_download

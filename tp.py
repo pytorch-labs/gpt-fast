@@ -4,14 +4,15 @@
 # This source code is licensed under the license found in the
 # LICENSE file in the root directory of this source tree.
 import os
-from typing import Optional, List
+from typing import List, Optional
 
 import torch
-from torch import nn
 import torch.distributed as dist
+from torch import nn
 from torch.distributed import _functional_collectives as funcol
-from model import Transformer, Attention, FeedForward
-from quantize import WeightOnlyInt4Linear, WeightOnlyInt8Linear
+
+from model import Attention, FeedForward, Transformer
+from quantize import WeightOnlyInt4Linear
 
 
 def _get_rank() -> int:

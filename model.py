@@ -3,14 +3,14 @@
 
 # This source code is licensed under the license found in the
 # LICENSE file in the root directory of this source tree.
-import math
 from dataclasses import dataclass
 from typing import Optional
 
 import torch
 import torch.nn as nn
-from torch.nn import functional as F
 from torch import Tensor
+from torch.nn import functional as F
+
 
 def find_multiple(n: int, k: int) -> int:
     if n % k == 0:
