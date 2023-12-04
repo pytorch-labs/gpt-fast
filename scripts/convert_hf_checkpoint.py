@@ -78,6 +78,7 @@ def convert_hf_checkpoint(
         else:
             new_key = weight_map[key]
 
+        value = value.to(dtype=torch.bfloat16)
         final_result[new_key] = value
 
     for key in tuple(final_result.keys()):
