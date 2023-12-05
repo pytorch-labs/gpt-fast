@@ -1,0 +1,30 @@
+[tool.black]
+line-length = 119
+target-version = ['py37', 'py38', 'py39']
+skip-string-normalization = true
+include = '\.pyi?$'
+exclude = '''
+(
+  /(
+      \.eggs
+    | \.git
+    | \.mypy_cache
+    | \.tox
+    | _build
+    | build
+    | dist
+  )/
+  | .venv/
+)
+'''
+
+[tool.isort]
+# https://github.com/timothycrosley/isort
+# https://github.com/timothycrosley/isort/wiki/isort-Settings
+profile = "black"
+line_length = 119
+indent = '    '
+multi_line_output = 3
+include_trailing_comma = true
+#force_grid_wrap = 0
+atomic = true

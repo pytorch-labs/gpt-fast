@@ -1,0 +1,4 @@
+# pre-commits
+pre-commit==3.5.0
+# testing
+pytest==7.4.3

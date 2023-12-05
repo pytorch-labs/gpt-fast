@@ -30,8 +30,7 @@ from sentencepiece import SentencePieceProcessor
 
 from model import LLaMA
 
-lm_evaluation_harness_path = '/'.join(
-    os.getcwd().split('/')[:-1] + ['lm-evaluation-harness'])
+lm_evaluation_harness_path = '/'.join(os.getcwd().split('/')[:-1] + ['lm-evaluation-harness'])
 sys.path.insert(0, lm_evaluation_harness_path)
 import lm_eval
 import main as lm_evaluation_harness_main
@@ -77,15 +76,17 @@ def setup_cache_padded_seq_input_pos_max_seq_length_for_prefill(
 
     return seq, input_pos, max_seq_length
 
+
 class SimpleGPTEvalWrapper(lm_eval.base.BaseLM):
     """
     A wrapper class for SimpleGPT, providing integration with the lm-evaluation-harness library.
     """
+
     def __init__(
         self,
         model: LLaMA,
         tokenizer,
-        max_seq_length: Optional[int]=None,
+        max_seq_length: Optional[int] = None,
     ):
         super().__init__()
         self._model = model
@@ -114,8 +115,7 @@ class SimpleGPTEvalWrapper(lm_eval.base.BaseLM):
         return self._device
 
     def tok_encode(self, string: str):
-        encoded = encode_tokens(self._tokenizer,
-            string, bos=True, eos=False, device=self._device)
+        encoded = encode_tokens(self._tokenizer, string, bos=True, eos=False, device=self._device)
         # encoded is a pytorch tensor, but some internal logic in the
         # eval harness expects it to be a list instead
         # TODO: verify this for multi-batch as well
@@ -131,13 +131,12 @@ class SimpleGPTEvalWrapper(lm_eval.base.BaseLM):
         inps = inps.squeeze(0)
 
         max_new_tokens = 1
-        seq, input_pos, max_seq_length = \
-            setup_cache_padded_seq_input_pos_max_seq_length_for_prefill(
-                self._model,
-                inps,
-                max_new_tokens,
-                self.max_length,
-            )
+        seq, input_pos, max_seq_length = setup_cache_padded_seq_input_pos_max_seq_length_for_prefill(
+            self._model,
+            inps,
+            max_new_tokens,
+            self.max_length,
+        )
         x = seq.index_select(0, input_pos).view(1, -1)
         logits = model_forward(self._model, x, input_pos)
         return logits
@@ -227,7 +226,7 @@ def main(
 
     if compile:
         global model_forward
-        model_forward = torch.compile(model_forward,  mode="reduce-overhead", dynamic=True, fullgraph=True)
+        model_forward = torch.compile(model_forward, mode="reduce-overhead", dynamic=True, fullgraph=True)
         torch._inductor.config.coordinate_descent_tuning = True
 
     t1 = time.time()
@@ -246,15 +245,31 @@ def main(
 
 if __name__ == '__main__':
     import argparse
+
     parser = argparse.ArgumentParser(description='Your CLI description.')
 
-    parser.add_argument('--checkpoint_path', type=Path, default=Path("checkpoints/meta-llama/Llama-2-7b-chat-hf/lit_model.pth"), help='Model checkpoint path.')
+    parser.add_argument(
+        '--checkpoint_path',
+        type=Path,
+        default=Path("checkpoints/meta-llama/Llama-2-7b-chat-hf/lit_model.pth"),
+        help='Model checkpoint path.',
+    )
     parser.add_argument('--compile', action='store_true', help='Whether to compile the model.')
-    parser.add_argument('--tasks', nargs='+', type=str, default=["hellaswag"], help='list of lm-eluther tasks to evaluate usage: --tasks task1 task2')
+    parser.add_argument(
+        '--tasks',
+        nargs='+',
+        type=str,
+        default=["hellaswag"],
+        help='list of lm-eluther tasks to evaluate usage: --tasks task1 task2',
+    )
     parser.add_argument('--limit', type=int, default=None, help='number of samples to evalulate')
     parser.add_argument('--max_seq_length', type=int, default=None, help='maximum length sequence to evaluate')
 
     args = parser.parse_args()
     main(
-        Path(args.checkpoint_path), args.compile, args.tasks, args.limit, args.max_seq_length,
+        Path(args.checkpoint_path),
+        args.compile,
+        args.tasks,
+        args.limit,
+        args.max_seq_length,
     )
