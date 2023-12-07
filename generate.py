@@ -13,9 +13,18 @@ import torch
 import torch._dynamo.config
 import torch._inductor.config
 
+def device_sync(device):
+    if "cuda" in device:
+        torch.cuda.synchronize()
+    elif "cpu" in device:
+        pass
+    else:
+        print(f"device={device} is not yet suppported")
+
+
 torch._inductor.config.coordinate_descent_tuning = True
 torch._inductor.config.triton.unique_kernel_names = True
-torch._inductor.config.fx_graph_cache = True # Experimental feature to reduce compilation times, will be on by default in future
+# torch._inductor.config.fx_graph_cache = True # Experimental feature to reduce compilation times, will be on by default in future
 
 
 # support running without installing as a package
@@ -58,18 +67,30 @@ def decode_one_token(model: Transformer, x: torch.Tensor, input_pos: torch.Tenso
     logits = model(x, input_pos)
     return sample(logits, **sampling_kwargs)
 
-def decode_n_tokens(model: Transformer, cur_token: torch.Tensor, input_pos: torch.Tensor, num_new_tokens: int, callback=lambda _: _, **sampling_kwargs):
+def decode_n_tokens(model: Transformer, cur_token: torch.Tensor, input_pos: torch.Tensor, num_new_tokens: int, use_sdpa=False, callback=lambda _: _, **sampling_kwargs):
     new_tokens, new_probs = [], []
-    for i in range(num_new_tokens):
-        with torch.backends.cuda.sdp_kernel(enable_flash=False, enable_mem_efficient=False, enable_math=True): # Actually better for Inductor to codegen attention here
+    if not use_sdpa:
+        for i in range(num_new_tokens):
+            with torch.backends.cuda.sdp_kernel(enable_flash=False, enable_mem_efficient=False, enable_math=True): # Actually better for Inductor to codegen attention here
+                next_token, next_prob = decode_one_token(
+                    model, cur_token, input_pos, **sampling_kwargs
+            )
+            input_pos += 1
+            new_tokens.append(next_token.clone())
+            callback(new_tokens[-1])
+            new_probs.append(next_prob.clone())
+            cur_token = next_token.view(1, -1)
+    else:
+        for i in range(num_new_tokens):
             next_token, next_prob = decode_one_token(
                 model, cur_token, input_pos, **sampling_kwargs
             )
-        input_pos += 1
-        new_tokens.append(next_token.clone())
-        callback(new_tokens[-1])
-        new_probs.append(next_prob.clone())
-        cur_token = next_token.view(1, -1)
+            input_pos += 1
+            new_tokens.append(next_token.clone())
+            callback(new_tokens[-1])
+            new_probs.append(next_prob.clone())
+            cur_token = next_token.view(1, -1)
+
     return new_tokens, new_probs
 
 
@@ -82,12 +103,13 @@ def speculative_decode(
     cur_token: torch.Tensor,
     input_pos: int,
     speculate_k: int,
+    use_sdpa=False,
     **sampling_kwargs
 ) -> torch.Tensor:
     # draft model inference sequentially
     device = cur_token.device
     orig_input_pos = torch.tensor([input_pos], dtype=torch.int64, device=cur_token.device)
-    draft_tokens, draft_probs = decode_n_tokens(draft_model, cur_token.view(1, -1), orig_input_pos.clone(), speculate_k, **sampling_kwargs)
+    draft_tokens, draft_probs = decode_n_tokens(draft_model, cur_token.view(1, -1), orig_input_pos.clone(), speculate_k, use_sdpa=use_sdpa, **sampling_kwargs)
 
     draft_tokens = torch.cat(draft_tokens)
     # parallel inference on target model using draft tokens
@@ -135,6 +157,7 @@ def generate(
     interactive: bool,
     draft_model: Transformer,
     speculate_k: Optional[int] = 8,
+    use_sdpa=False,
     callback = lambda x: x,
     **sampling_kwargs
 ) -> torch.Tensor:
@@ -178,7 +201,7 @@ def generate(
             cur_token = next_token.view(())
 
             next_tokens = speculative_decode(
-                model, draft_model, cur_token, input_pos, speculate_k, **sampling_kwargs
+                model, draft_model, cur_token, input_pos, speculate_k,  use_sdpa=use_sdpa, **sampling_kwargs
             )
 
             accept_counts[len(next_tokens) - 1] += 1
@@ -189,7 +212,7 @@ def generate(
             input_pos = input_pos + num_added
             next_token = next_tokens[-1]
     else:
-        generated_tokens, _ = decode_n_tokens(model, next_token.view(1, -1), input_pos, max_new_tokens - 1, callback=callback, **sampling_kwargs)
+        generated_tokens, _ = decode_n_tokens(model, next_token.view(1, -1), input_pos, max_new_tokens - 1, use_sdpa=use_sdpa, callback=callback, **sampling_kwargs)
         seq[T + 1:] = torch.cat(generated_tokens)
 
     generate_stats = {
@@ -248,6 +271,8 @@ def main(
     profile: Optional[Path] = None,
     draft_checkpoint_path: Optional[Path] = None,
     speculate_k: int = 5,
+    use_sdpa=False,
+    device='cuda',
 ) -> None:
     """Generates text samples based on a pre-trained Transformer model and tokenizer.
     """
@@ -265,7 +290,7 @@ def main(
             # only print on rank 0
             print = lambda *args, **kwargs: None
 
-    device = 'cuda'
+    print(f"Using device={device}")
     precision = torch.bfloat16
     is_speculative = draft_checkpoint_path is not None
     is_chat = "chat" in str(checkpoint_path)
@@ -279,7 +304,7 @@ def main(
     else:
         draft_model = None
 
-    torch.cuda.synchronize()
+    device_sync(device=device) # MKG
     print(f"Time to load model: {time.time() - t0:.02f} seconds")
 
     tokenizer = SentencePieceProcessor(model_file=str(tokenizer_path))
@@ -289,8 +314,9 @@ def main(
     torch.manual_seed(1234)
     model_size = sum([p.numel() * p.dtype.itemsize for p in itertools.chain(model.parameters(), model.buffers())])
     if compile:
-        if is_speculative and use_tp:
-            torch._inductor.config.triton.cudagraph_trees = False # Bug with cudagraph trees in this case
+        # MKG
+        # if is_speculative and use_tp:
+        #     torch._inductor.config.triton.cudagraph_trees = False # Bug with cudagraph trees in this case
 
         if is_speculative:
             global model_forward, logits_to_prob
@@ -311,7 +337,7 @@ def main(
     start = -1 if compile else 0
 
     for i in range(start, num_samples):
-        torch.cuda.synchronize()
+        device_sync(device=device) # MKG
         if i >= 0 and interactive:
             prompt = input("What is your prompt? ")
             if is_chat:
@@ -349,6 +375,7 @@ def main(
                 max_new_tokens,
                 draft_model=draft_model,
                 speculate_k=speculate_k,
+                use_sdpa=use_sdpa,
                 interactive=interactive,
                 callback=callback,
                 temperature=temperature,
@@ -363,7 +390,7 @@ def main(
                 prof.export_chrome_trace(f"{profile}_rank_{rank}.json")
             else:
                 prof.export_chrome_trace(f"{profile}.json")
-        torch.cuda.synchronize()
+        device_sync(device=device) # MKG
         t = time.perf_counter() - t0
 
         if not interactive:
@@ -402,9 +429,12 @@ if __name__ == '__main__':
     parser.add_argument('--profile', type=Path, default=None, help='Profile path.')
     parser.add_argument('--speculate_k', type=int, default=5, help='Speculative execution depth.')
     parser.add_argument('--draft_checkpoint_path', type=Path, default=None, help='Draft checkpoint path.')
+    parser.add_argument('--use_sdpa', action='store_true', help='Whether to use SDPA')
+    parser.add_argument('--device', type=str, default="cuda", help='device to use')
 
     args = parser.parse_args()
     main(
         args.prompt, args.interactive, args.num_samples, args.max_new_tokens, args.top_k,
-        args.temperature, args.checkpoint_path, args.compile, args.compile_prefill, args.profile, args.draft_checkpoint_path, args.speculate_k
+        args.temperature, args.checkpoint_path, args.compile, args.compile_prefill, args.profile, args.draft_checkpoint_path,
+        args.speculate_k, args.use_sdpa, args.device
     )
