@@ -16,6 +16,7 @@ For an in-depth walkthrough of what's in this codebase, see this [blog post](htt
 
 ## Installation
 [Download PyTorch nightly](https://pytorch.org/get-started/locally/)
+
 Install sentencepiece and huggingface_hub
 ```bash
 pip install sentencepiece huggingface_hub
@@ -44,7 +45,7 @@ export MODEL_REPO=meta-llama/Llama-2-7b-chat-hf
 ```
 
 ## Benchmarks
-Benchmarks run on an A100-80GB, power limited to 330W.
+Benchmarks were run on an A100-80GB, power limited to 330W.
 
 | Model    | Technique | Tokens/Second | Memory Bandwidth (GB/s) |
 | -------- | ------- | ------ | ------ |
@@ -149,7 +150,7 @@ version of int4 quantization by using the same command to quantize it but adding
 python quantize.py --mode int4-gptq --calibration_tasks wikitext --calibration_seq_length 2048
 ```
 
-You can then eval or generate text with this model in the same way as above.
+You can then evaluate or generate text with this model in the same way as above.
 
 ## License
 
