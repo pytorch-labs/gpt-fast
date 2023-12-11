@@ -314,9 +314,8 @@ def main(
     torch.manual_seed(1234)
     model_size = sum([p.numel() * p.dtype.itemsize for p in itertools.chain(model.parameters(), model.buffers())])
     if compile:
-        # MKG
-        # if is_speculative and use_tp:
-        #     torch._inductor.config.triton.cudagraph_trees = False # Bug with cudagraph trees in this case
+        if is_speculative and use_tp: # and ("cuda" in device):
+            torch._inductor.config.triton.cudagraph_trees = False # Bug with cudagraph trees in this case
 
         if is_speculative:
             global model_forward, logits_to_prob
