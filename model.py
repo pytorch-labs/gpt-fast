@@ -29,6 +29,7 @@ class ModelArgs:
     head_dim: int = 64
     rope_base: float = 10000
     norm_eps: float = 1e-5
+    scaling_factor: float = 1.0
 
     def __post_init__(self):
         if self.n_local_heads == -1:
@@ -101,7 +102,7 @@ class Transformer(nn.Module):
         for b in self.layers:
             b.attention.kv_cache = KVCache(max_batch_size, max_seq_length, self.config.n_local_heads, head_dim)
 
-        self.freqs_cis = precompute_freqs_cis(self.config.block_size, self.config.dim // self.config.n_head, self.config.rope_base)
+        self.freqs_cis = precompute_freqs_cis(self.config.block_size, self.config.dim // self.config.n_head, self.config.rope_base, self.config.scaling_factor)
         self.causal_mask = torch.tril(torch.ones(self.max_seq_length, self.max_seq_length, dtype=torch.bool))
 
     def forward(self, idx: Tensor, input_pos: Optional[Tensor] = None) -> Tensor:
@@ -213,10 +214,10 @@ class RMSNorm(nn.Module):
 
 
 def precompute_freqs_cis(
-    seq_len: int, n_elem: int, base: int = 10000
+    seq_len: int, n_elem: int, base: int = 10000, scaling_factor: float = 1.0
 ) -> Tensor:
     freqs = 1.0 / (base ** (torch.arange(0, n_elem, 2)[: (n_elem // 2)].float() / n_elem))
-    t = torch.arange(seq_len, device=freqs.device)
+    t = torch.arange(seq_len, device=freqs.device) / scaling_factor
     freqs = torch.outer(t, freqs)
     freqs_cis = torch.polar(torch.ones_like(freqs), freqs)
     cache = torch.stack([freqs_cis.real, freqs_cis.imag], dim=-1)
