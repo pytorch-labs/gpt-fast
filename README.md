@@ -14,6 +14,12 @@ This is *NOT* intended to be a "framework" or "library" - it is intended to show
 
 For an in-depth walkthrough of what's in this codebase, see this [blog post](https://pytorch.org/blog/accelerating-generative-ai-2/).
 
+## Community
+
+Projects inspired by gpt-fast in the community:
+
+- [gpt-blazing](https://github.com/armed-gpt/gpt-blazing): applies the same performance optimization strategy to more models (e.g., baichuan2).
+
 ## Installation
 [Download PyTorch nightly](https://pytorch.org/get-started/locally/)
 Install sentencepiece and huggingface_hub
