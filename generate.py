@@ -222,8 +222,10 @@ def _load_model(checkpoint_path, device, precision, use_tp):
         simple_quantizer = WeightOnlyInt4QuantHandler(model, groupsize)
         model = simple_quantizer.convert_for_runtime()
 
-    checkpoint = torch.load(str(checkpoint_path), mmap=True, weights_only=True)
-    model.load_state_dict(checkpoint, assign=True)
+    # if TP>1 the model is likely too big to fit into single device,
+    # and we are more likely to run out GPU memory before RAM.
+    checkpoint = torch.load(str(checkpoint_path), map_location=None if use_tp else device, mmap=True, weights_only=True)
+    model.load_state_dict(checkpoint, strict=True, assign=True)
 
     if use_tp:
         from tp import apply_tp
@@ -325,8 +327,9 @@ def main(
                 nonlocal done_generating
                 if done_generating:
                     return
-                buffer.append(tokenizer.decode([period_id] + x.tolist())[1:])
-                if x.item() == tokenizer.eos_id():
+                x = x.item()
+                buffer.append(tokenizer.decode([period_id, x])[1:])
+                if x == tokenizer.eos_id():
                     done_generating = True
                 if len(buffer) == 4 or done_generating:
                     print(''.join(buffer), end='', flush=True)
