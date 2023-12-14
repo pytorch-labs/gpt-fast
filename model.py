@@ -51,7 +51,11 @@ class ModelArgs:
 
 
 transformer_configs = {
-    "CodeLlama-7b-Python-hf": dict(block_size=16384, vocab_size=32000, n_layer=32, dim = 4096, rope_base=1000000),
+    "deepseek-coder-1.3b-instruct": dict(block_size=16384, vocab_size=32256, intermediate_size=5504, n_layer=24, n_head=16, dim=2048, norm_eps=1e-6, rope_base = 100000, scaling_factor=4.0),
+    "deepseek-coder-6.7b-base":dict(block_size=16384, vocab_size=32256, intermediate_size=11008, norm_eps=1e-6, rope_base = 100000, scaling_factor=4.0),
+    "deepseek-coder-6.7b-instruct":dict(block_size=16384, vocab_size=32256, intermediate_size=11008, norm_eps=1e-6, rope_base = 100000, scaling_factor=4.0),
+    "deepseek-coder-33b-instruct":dict(block_size=16384, vocab_size=32256, intermediate_size=19200, n_head=56, n_local_heads=8, n_layer=62, dim=7168,  norm_eps=1e-6, rope_base = 100000, scaling_factor=4.0),
+    "CodeLlama-7b-Python-hf": dict(block_size=16384, vocab_size=32000, n_layer=32, n_head=64, n_local_heads=8, dim=4096, rope_base=1000000),
     "7B": dict(n_layer=32, n_head=32, dim=4096),
     "13B": dict(n_layer=40, n_head=40, dim=5120),
     "30B": dict(n_layer=60, n_head=52, dim=6656),

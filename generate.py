@@ -16,7 +16,7 @@ import torch._inductor.config
 torch._inductor.config.coordinate_descent_tuning = True
 torch._inductor.config.triton.unique_kernel_names = True
 torch._inductor.config.fx_graph_cache = True # Experimental feature to reduce compilation times, will be on by default in future
-
+from transformers import AutoTokenizer
 
 # support running without installing as a package
 wd = Path(__file__).parent.parent.resolve()
@@ -199,8 +199,11 @@ def generate(
 
 def encode_tokens(tokenizer, string, bos=True, device='cuda'):
     tokens = tokenizer.encode(string)
-    if bos:
-        tokens = [tokenizer.bos_id()] + tokens
+    if bos is False and tokens[0] == tokenizer.bos_id:
+        tokens = tokens[1:]
+    elif bos and tokens[0] != tokenizer.bos_id:
+        tokens = [tokenizer.bos_id] + tokens
+
     return torch.tensor(tokens, dtype=torch.int, device=device)
 
 def _load_model(checkpoint_path, device, precision, use_tp):
@@ -255,8 +258,8 @@ def main(
     """
     assert checkpoint_path.is_file(), checkpoint_path
 
-    tokenizer_path = checkpoint_path.parent / "tokenizer.model"
-    assert tokenizer_path.is_file(), tokenizer_path
+    hf_name = "/".join(str(checkpoint_path.parent).split("/")[1:])
+    tokenizer = AutoTokenizer.from_pretrained(hf_name)
 
     global print
     rank = maybe_init_dist()
@@ -283,7 +286,6 @@ def main(
     torch.cuda.synchronize()
     print(f"Time to load model: {time.time() - t0:.02f} seconds")
 
-    tokenizer = SentencePieceProcessor(model_file=str(tokenizer_path))
     encoded = encode_tokens(tokenizer, prompt, bos=True, device=device)
     prompt_length = encoded.size(0)
 
@@ -329,7 +331,7 @@ def main(
                     return
                 x = x.item()
                 buffer.append(tokenizer.decode([period_id, x])[1:])
-                if x == tokenizer.eos_id():
+                if x == tokenizer.eos_id:
                     done_generating = True
                 if len(buffer) == 4 or done_generating:
                     print(''.join(buffer), end='', flush=True)

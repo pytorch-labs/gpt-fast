@@ -9,7 +9,7 @@ from pathlib import Path
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from sentencepiece import SentencePieceProcessor
+from pathlib import Path
 
 try:
     from GPTQ import GenericGPTQRunner, InputRecorder, lm_eval
@@ -17,6 +17,7 @@ except:
     pass
 
 from model import Transformer
+from transformers import AutoTokenizer
 
 ##### Quantization Primitives ######
 
@@ -559,9 +560,8 @@ def quantize(
         print("Quantizing model weights for int4 weight-only affine per-channel groupwise quantization using GPTQ...")
         quant_handler = WeightOnlyInt4GPTQQuantHandler(model, groupsize)
 
-        tokenizer_path = checkpoint_path.parent / "tokenizer.model"
-        assert tokenizer_path.is_file(), tokenizer_path
-        tokenizer = SentencePieceProcessor(model_file=str(tokenizer_path))
+        hf_name = "/".join(str(checkpoint_path.parent).split("/")[1:])
+        tokenizer = AutoTokenizer.from_pretrained(hf_name)
 
         quantized_state_dict = quant_handler.create_quantized_state_dict(
             tokenizer,
