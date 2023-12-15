@@ -95,7 +95,7 @@ class SimpleGPTEvalWrapper(lm_eval.base.BaseLM):
 
     @property
     def eot_token_id(self):
-        return self._tokenizer.eos_id
+        return self._tokenizer.eos_token_id
 
     @property
     def max_length(self):

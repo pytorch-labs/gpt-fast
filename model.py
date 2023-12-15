@@ -51,6 +51,7 @@ class ModelArgs:
 
 
 transformer_configs = {
+    "TinyLlama-1.1B-intermediate-step-480k-1T": dict(block_size=2048, vocab_size=32000, intermediate_size=5632, n_layer=22, n_head=32, n_local_heads=4, dim=2048),
     "deepseek-coder-1.3b-instruct": dict(block_size=16384, vocab_size=32256, intermediate_size=5504, n_layer=24, n_head=16, dim=2048, norm_eps=1e-6, rope_base = 100000, scaling_factor=4.0),
     "deepseek-coder-6.7b-base":dict(block_size=16384, vocab_size=32256, intermediate_size=11008, norm_eps=1e-6, rope_base = 100000, scaling_factor=4.0),
     "deepseek-coder-6.7b-instruct":dict(block_size=16384, vocab_size=32256, intermediate_size=11008, norm_eps=1e-6, rope_base = 100000, scaling_factor=4.0),

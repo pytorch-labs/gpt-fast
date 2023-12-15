@@ -1,0 +1,38 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "Inteactive big",
+            "type": "python",
+            "request": "launch",
+            "program": "${workspaceFolder}/generate.py",
+            "args": ["--interactive", "--compile", "--compile_prefill",
+                "--checkpoint_path", "./checkpoints/deepseek-ai/deepseek-coder-33b-instruct/model_int4.g32.pth",
+                "--draft_checkpoint_path", "./checkpoints/deepseek-ai/deepseek-coder-1.3b-instruct/model_int8.pth"
+                ],
+            "console": "integratedTerminal",
+            "env":{"TOKENIZERS_PARALLELISM":"true"},
+        },
+        {
+            "name": "Interactive small",
+            "type": "python",
+            "request": "launch",
+            "program": "${workspaceFolder}/generate.py",
+            "args": ["--interactive","--compile",
+            "--checkpoint_path",
+            "./checkpoints/deepseek-ai/deepseek-coder-1.3b-instruct/model_int8.pth",
+            ],
+            "env":{"TOKENIZERS_PARALLELISM":"true"},
+            "console": "integratedTerminal"
+        }
+        ,
+        {
+            "name": "Debug convert.py",
+            "type": "python",
+            "request": "launch",
+            "program": "${workspaceFolder}/scripts/convert_hf_checkpoint.py",
+            "args": [ "--checkpoint_dir", "${workspaceFolder}/checkpoints/deepseek-ai/deepseek-coder-1.3b-instruct/"],
+            "console": "integratedTerminal"
+        }
+    ]
+}
