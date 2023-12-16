@@ -260,7 +260,6 @@ def main(
     rank = maybe_init_dist()
     use_tp = rank is not None
     if use_tp:
-        torch.cuda.set_device(rank)
         if rank != 0:
             # only print on rank 0
             print = lambda *args, **kwargs: None
