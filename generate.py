@@ -328,7 +328,7 @@ def main(
                 buffer.append(tokenizer.decode([period_id] + x.tolist())[1:])
                 if x.item() == tokenizer.eos_id():
                     done_generating = True
-                if len(buffer) == 4 or done_generating:
+                if len(buffer) == 1 or done_generating:
                     print(''.join(buffer), end='', flush=True)
                     buffer.clear()
                 # print(, end='', flush=True)
