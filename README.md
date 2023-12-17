@@ -44,7 +44,7 @@ export MODEL_REPO=meta-llama/Llama-2-7b-chat-hf
 ```
 
 ## Benchmarks
-Benchmarks run on an A100-80GB, power limited to 330W.
+Benchmarks run on an 8xA100-80GB, power limited to 330W with a hybrid cube mesh topology. Note that all benchmarks are run at *batch size=1*, making the reported tokens/s numbers equivalent to "tokens/s/user". In addition, they are run with a very small prompt length (just 5 tokens).
 
 | Model    | Technique | Tokens/Second | Memory Bandwidth (GB/s) |
 | -------- | ------- | ------ | ------ |
@@ -62,13 +62,19 @@ Benchmarks run on an A100-80GB, power limited to 330W.
 | Model    | Number of GPUs | Tokens/Second | Memory Bandwidth (GB/s) |
 | -------- | ------- | ------ | ------ |
 | Llama-2-7B  | 1    |  104.9  | 1397.31 |
-|           | 2   | 136.27   | 954.01 |
-|           | 4   | 168.78   | 635.09 |
-|           | 8   | 179.27   | 395.85 |
+|           | 2   | 168.84   | 1181.99 |
+|           | 4   | 254.02   | 955.83 |
+|           | 8   | 328.43   | 704.10 |
 | Llama-2-70B  | 1    |  OOM  |  |
-|           | 2   | 20.53   | 1426.41 |
-|           | 4   | 34.15   | 1204.62 |
-|           | 8   | 47.25   | 858.28 |
+|           | 2   | 21.32   | 1481.87 |
+|           | 4   | 38.01   | 1340.76 |
+|           | 8   | 62.50   | 1135.29 |
+
+### Tensor Parallelism + Quantization
+| Model    | Technique | Tokens/Second | Memory Bandwidth (GB/s) |
+| Llama-2-70B | Base    | 62.50     | 1135.29 |
+|           | 8-bit   | 80.44    | 752.04 |
+|           | 4-bit (G=32)   | 90.77    | 548.10 |
 
 ### AMD
 Benchmarks run on one GCD of a MI-250x.
@@ -126,7 +132,7 @@ Note: Running on an A100 80GB, albeit power-limited to 330 watts. Empirically, s
 
 ## Tensor Parallelism
 ```bash
-torchrun --standalone --nproc_per_node=2 generate.py --compile --checkpoint_path checkpoints/$MODEL_REPO/model.pth
+ENABLE_INTRA_NODE_COMM=1 torchrun --standalone --nproc_per_node=2 generate.py --compile --checkpoint_path checkpoints/$MODEL_REPO/model.pth
 ```
 
 ## Experimental
