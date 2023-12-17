@@ -207,8 +207,8 @@ def _load_model(checkpoint_path, device, precision, use_tp):
     with torch.device('meta'):
         model = Transformer.from_name(checkpoint_path.parent.name)
 
-    if "int8" in str(checkpoint_path):
-        print("Using int8 weight-only quantization!")
+    if "fp8" in str(checkpoint_path):
+        print("Using fp8 weight-only quantization!")
         from quantize import WeightOnlyInt8QuantHandler
         simple_quantizer = WeightOnlyInt8QuantHandler(model)
         model = simple_quantizer.convert_for_runtime()
@@ -230,7 +230,7 @@ def _load_model(checkpoint_path, device, precision, use_tp):
         print("Applying tensor parallel to model ...")
         apply_tp(model)
 
-    model = model.to(device=device, dtype=precision)
+    model = model.to(device=device)
     return model.eval()
 
 B_INST, E_INST = "[INST]", "[/INST]"

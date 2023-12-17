@@ -195,6 +195,9 @@ class ConditionalFeedForward(nn.Module):
         self.w1 = nn.Parameter(torch.empty(config.num_experts, config.intermediate_size, config.dim))
         self.w2 = nn.Parameter(torch.empty(config.num_experts, config.intermediate_size, config.dim))
         self.w3 = nn.Parameter(torch.empty(config.num_experts, config.intermediate_size, config.dim))
+        self.num_experts = config.num_experts
+        self.intermediate_size = config.intermediate_size
+        self.dim = config.dim
 
     def forward(self, x: Tensor, expert_indices: Tensor) -> Tensor:
         w1_weights = self.w1[expert_indices].transpose(-1, -2) # [T, A, D, D]
