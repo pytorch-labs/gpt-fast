@@ -72,6 +72,7 @@ Benchmarks run on an 8xA100-80GB, power limited to 330W with a hybrid cube mesh 
 
 ### Tensor Parallelism + Quantization
 | Model    | Technique | Tokens/Second | Memory Bandwidth (GB/s) |
+| -------- | ------- | ------ | ------ |
 | Llama-2-70B | Base    | 62.50     | 1135.29 |
 |           | 8-bit   | 80.44    | 752.04 |
 |           | 4-bit (G=32)   | 90.77    | 548.10 |
