@@ -253,7 +253,7 @@ def main(
     prompt: str = "Hello, my name is",
     interactive: bool = False,
     num_samples: int = 5,
-    max_new_tokens: int = 100,
+    max_new_tokens: int = 1000,
     top_k: int = 200,
     temperature: float = 0.8,
     checkpoint_path: Path = Path("checkpoints/meta-Transformer/Transformer-2-7b-chat-hf/model.pth"),

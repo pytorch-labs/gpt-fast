@@ -1,4 +1,8 @@
 # 56.80
+export NCCL_P2P_DISABLE=1
+export TOKENIZERS_PARALLELISM=true
+export CUDA_VISIBLE_DEVICES=0,1
 export MODEL_REPO=deepseek-ai/deepseek-coder-33b-instruct
 export DRAFT_MODEL_REPO=deepseek-ai/deepseek-coder-1.3b-instruct
-time python generate.py --compile  --compile_prefill --draft_checkpoint_path checkpoints/$DRAFT_MODEL_REPO/model_int8.pth  --checkpoint_path checkpoints/$MODEL_REPO/model_int4.pth --speculate_k 6 --prompt "def quicksort(arr):" --max_new_tokens 200 --num_samples 50
+time torchrun --nproc_per_node=2 generate.py --compile  --compile_prefill --draft_checkpoint_path checkpoints/$DRAFT_MODEL_REPO/model_int8.pth  --checkpoint_path checkpoints/$MODEL_REPO/model_int4.g32.pth --speculate_k 6 --prompt "def quicksort(arr):" --max_new_tokens 16000 --num_samples 10
+
