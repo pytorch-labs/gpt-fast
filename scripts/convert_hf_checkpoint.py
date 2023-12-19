@@ -124,6 +124,9 @@ def convert_hf_checkpoint(
             q = final_result[key]
             k = final_result[key.replace("wq", "wk")]
             v = final_result[key.replace("wq", "wv")]
+            if len(st_files):
+                q = q[[(i>>1)+(64*(i&1))+j for j in range(0,4096,128) for i in range(128)]]
+                k = k[[(i>>1)+(64*(i&1))+j for j in range(0,1024,128) for i in range(128)]]
             # q = permute(q, config.n_head)
             # k = permute(k, config.n_local_heads)
             final_result[key.replace("wq", "wqkv")] = torch.cat([q, k, v])
