@@ -132,6 +132,8 @@ def convert_hf_checkpoint(
             del final_result[key.replace("wq", "wv")]
         if "w1" in key or "w2" in key or "w3" in key:
             s = (config.num_experts, config.intermediate_size, config.dim)
+            if final_result[key].shape[-2] == config.dim:
+                final_result[key] = final_result[key].transpose(-1,-2)
             final_result[key] = final_result[key].reshape(*s).contiguous()
         if "gate" in key:
             final_result[key] = final_result[key].contiguous()
