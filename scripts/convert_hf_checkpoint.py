@@ -56,10 +56,19 @@ def convert_hf_checkpoint(
         "layers.{}.attention.wk.weight": "layers.{}.attention.wk.weight",
         "layers.{}.attention.wv.weight": "layers.{}.attention.wv.weight",
         "layers.{}.attention.wo.weight": "layers.{}.attention.wo.weight",
-        "layers.{}.block_sparse_moe.w1": "layers.{}.block_sparse_moe.cond_ffn.w1",
-        "layers.{}.block_sparse_moe.w2": "layers.{}.block_sparse_moe.cond_ffn.w2",
-        "layers.{}.block_sparse_moe.w3": "layers.{}.block_sparse_moe.cond_ffn.w3",
+        "layers.{}.self_attn.q_proj.weight": "layers.{}.attention.wq.weight",
+        "layers.{}.self_attn.k_proj.weight": "layers.{}.attention.wk.weight",
+        "layers.{}.self_attn.v_proj.weight": "layers.{}.attention.wv.weight",
+        "layers.{}.self_attn.o_proj.weight": "layers.{}.attention.wo.weight",
+        "layers.{}.block_sparse_moe.w1": "layers.{}.block_sparse_moe.cond_ffn.w1", #.weight",
+        "layers.{}.block_sparse_moe.w2": "layers.{}.block_sparse_moe.cond_ffn.w2", #.weight",
+        "layers.{}.block_sparse_moe.w3": "layers.{}.block_sparse_moe.cond_ffn.w3", #.weight",
+        "layers.{}.block_sparse_moe.w1.weight": "layers.{}.block_sparse_moe.cond_ffn.w1", #.weight",
+        "layers.{}.block_sparse_moe.w2.weight": "layers.{}.block_sparse_moe.cond_ffn.w2", #.weight",
+        "layers.{}.block_sparse_moe.w3.weight": "layers.{}.block_sparse_moe.cond_ffn.w3", #.weight",
         "layers.{}.block_sparse_moe.gate.weight": "layers.{}.block_sparse_moe.gate.weight",
+        "layers.{}.input_layernorm.weight": "layers.{}.attention_norm.weight",
+        "layers.{}.post_attention_layernorm.weight": "layers.{}.ffn_norm.weight",
         "layers.{}.attention_norm.weight": "layers.{}.attention_norm.weight",
         "layers.{}.ffn_norm.weight": "layers.{}.ffn_norm.weight",
         "norm.weight": "norm.weight",
@@ -82,7 +91,19 @@ def convert_hf_checkpoint(
         merged_result.update(state_dict)
     if len(merged_result) == 0: # assume st
         stc = SafetensorsCollection(sorted(st_files))
-        merged_result = {k[6:]:stc[k] for k in stc}
+        for k in stc:
+            if k == 'lm_head.weight':
+                merged_result['output.weight'] = stc[k]
+                continue
+            K = k[6:]
+            if 'experts' in k:
+                abstract_key = re.sub(r'experts.(\d+).', 'experts.{}.', k, count=1)
+                layer_num = re.search(r'\d+', k).group(0)
+                lk = f'layers.{layer_num}.block_sparse_moe'+k[-10:]
+                if lk in merged_result: continue
+                merged_w = torch.stack([stc[abstract_key.format(i)] for i in range(8)])
+                merged_result[lk] = merged_w
+            else: merged_result[K] = stc[k]
     if len(merged_result) == 0: raise RuntimeError(f"nothing found in {pt_files=} {st_files=}")
     final_result = {}
     for key, value in merged_result.items():
@@ -110,7 +131,8 @@ def convert_hf_checkpoint(
             del final_result[key.replace("wq", "wk")]
             del final_result[key.replace("wq", "wv")]
         if "w1" in key or "w2" in key or "w3" in key:
-            final_result[key] = final_result[key].reshape(config.num_experts, config.intermediate_size, config.dim).contiguous()
+            s = (config.num_experts, config.intermediate_size, config.dim)
+            final_result[key] = final_result[key].reshape(*s).contiguous()
         if "gate" in key:
             final_result[key] = final_result[key].contiguous()
         # if "w1" in key:
