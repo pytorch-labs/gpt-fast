@@ -18,6 +18,24 @@ sys.path.append(str(wd))
 from model import ModelArgs
 import glob
 
+# https://gist.github.com/crowsonkb/536761424563157935a64e415f99a076
+import safetensors.torch
+class SafetensorsCollection:
+    def __init__(self, files):
+        self.weight_map = {}
+        for file in files:
+            st = safetensors.torch.safe_open(file, "pt")
+            for k in st.keys():
+                self.weight_map[k] = st
+
+    def __getitem__(self, key):
+        return self.weight_map[key].get_tensor(key)
+
+    def __iter__(self):
+        return iter(self.weight_map)
+
+    def __len__(self):
+        return len(self.weight_map)
 
 @torch.inference_mode()
 def convert_hf_checkpoint(
@@ -47,6 +65,7 @@ def convert_hf_checkpoint(
         "output.weight": "output.weight",
     }
     pt_files = glob.glob(str(checkpoint_dir / "*.pt"))
+    st_files = glob.glob(str(checkpoint_dir / "*.pt"))
 
     def permute(w, n_head):
         dim = config.dim
@@ -60,6 +79,8 @@ def convert_hf_checkpoint(
     for file in sorted(pt_files):
         state_dict = torch.load(str(file), map_location="cpu", mmap=True, weights_only=True)
         merged_result.update(state_dict)
+    if len(merged_result) == 0: # assume st
+        merged_result = SafetensorsCollection(sorted(st_files))
     final_result = {}
     for key, value in merged_result.items():
         if "layers" in key:
