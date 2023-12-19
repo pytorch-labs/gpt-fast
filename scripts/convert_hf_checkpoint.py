@@ -51,6 +51,7 @@ def convert_hf_checkpoint(
 
     weight_map = {
         "tok_embeddings.weight": "tok_embeddings.weight",
+        "embed_tokens.weight": "tok_embeddings.weight",
         "layers.{}.attention.wq.weight": "layers.{}.attention.wq.weight",
         "layers.{}.attention.wk.weight": "layers.{}.attention.wk.weight",
         "layers.{}.attention.wv.weight": "layers.{}.attention.wv.weight",
@@ -65,7 +66,7 @@ def convert_hf_checkpoint(
         "output.weight": "output.weight",
     }
     pt_files = glob.glob(str(checkpoint_dir / "*.pt"))
-    st_files = glob.glob(str(checkpoint_dir / "*.pt"))
+    st_files = glob.glob(str(checkpoint_dir / "*.safetensors"))
 
     def permute(w, n_head):
         dim = config.dim
@@ -80,11 +81,13 @@ def convert_hf_checkpoint(
         state_dict = torch.load(str(file), map_location="cpu", mmap=True, weights_only=True)
         merged_result.update(state_dict)
     if len(merged_result) == 0: # assume st
-        merged_result = SafetensorsCollection(sorted(st_files))
+        stc = SafetensorsCollection(sorted(st_files))
+        merged_result = {k[6:]:stc[k] for k in stc}
+    if len(merged_result) == 0: raise RuntimeError(f"nothing found in {pt_files=} {st_files=}")
     final_result = {}
     for key, value in merged_result.items():
         if "layers" in key:
-            abstract_key = re.sub(r'.(\d+).', '.{}.', key)
+            abstract_key = re.sub(r'.(\d+).', '.{}.', key, count=1)
             layer_num = re.search(r'\d+', key).group(0)
             new_key = weight_map[abstract_key]
             if new_key is None:
