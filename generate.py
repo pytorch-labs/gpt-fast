@@ -67,21 +67,10 @@ def decode_one_token(model: Transformer, x: torch.Tensor, input_pos: torch.Tenso
     logits = model(x, input_pos)
     return sample(logits, **sampling_kwargs)
 
-def decode_n_tokens(model: Transformer, cur_token: torch.Tensor, input_pos: torch.Tensor, num_new_tokens: int, use_sdpa=False, callback=lambda _: _, **sampling_kwargs):
+def decode_n_tokens(model: Transformer, cur_token: torch.Tensor, input_pos: torch.Tensor, num_new_tokens: int, callback=lambda _: _, **sampling_kwargs):
     new_tokens, new_probs = [], []
-    if not use_sdpa:
-        for i in range(num_new_tokens):
-            with torch.backends.cuda.sdp_kernel(enable_flash=False, enable_mem_efficient=False, enable_math=True): # Actually better for Inductor to codegen attention here
-                next_token, next_prob = decode_one_token(
-                    model, cur_token, input_pos, **sampling_kwargs
-            )
-            input_pos += 1
-            new_tokens.append(next_token.clone())
-            callback(new_tokens[-1])
-            new_probs.append(next_prob.clone())
-            cur_token = next_token.view(1, -1)
-    else:
-        for i in range(num_new_tokens):
+    for i in range(num_new_tokens):
+        with torch.backends.cuda.sdp_kernel(enable_flash=False, enable_mem_efficient=False, enable_math=True): # Actually better for Inductor to codegen attention here
             next_token, next_prob = decode_one_token(
                 model, cur_token, input_pos, **sampling_kwargs
             )
@@ -103,13 +92,12 @@ def speculative_decode(
     cur_token: torch.Tensor,
     input_pos: int,
     speculate_k: int,
-    use_sdpa=False,
     **sampling_kwargs
 ) -> torch.Tensor:
     # draft model inference sequentially
     device = cur_token.device
     orig_input_pos = torch.tensor([input_pos], dtype=torch.int64, device=cur_token.device)
-    draft_tokens, draft_probs = decode_n_tokens(draft_model, cur_token.view(1, -1), orig_input_pos.clone(), speculate_k, use_sdpa=use_sdpa, **sampling_kwargs)
+    draft_tokens, draft_probs = decode_n_tokens(draft_model, cur_token.view(1, -1), orig_input_pos.clone(), speculate_k, **sampling_kwargs)
 
     draft_tokens = torch.cat(draft_tokens)
     # parallel inference on target model using draft tokens
@@ -157,7 +145,6 @@ def generate(
     interactive: bool,
     draft_model: Transformer,
     speculate_k: Optional[int] = 8,
-    use_sdpa=False,
     callback = lambda x: x,
     **sampling_kwargs
 ) -> torch.Tensor:
@@ -201,7 +188,7 @@ def generate(
             cur_token = next_token.view(())
 
             next_tokens = speculative_decode(
-                model, draft_model, cur_token, input_pos, speculate_k,  use_sdpa=use_sdpa, **sampling_kwargs
+                model, draft_model, cur_token, input_pos, speculate_k, **sampling_kwargs
             )
 
             accept_counts[len(next_tokens) - 1] += 1
@@ -212,7 +199,7 @@ def generate(
             input_pos = input_pos + num_added
             next_token = next_tokens[-1]
     else:
-        generated_tokens, _ = decode_n_tokens(model, next_token.view(1, -1), input_pos, max_new_tokens - 1, use_sdpa=use_sdpa, callback=callback, **sampling_kwargs)
+        generated_tokens, _ = decode_n_tokens(model, next_token.view(1, -1), input_pos, max_new_tokens - 1, callback=callback, **sampling_kwargs)
         seq[T + 1:] = torch.cat(generated_tokens)
 
     generate_stats = {
@@ -271,7 +258,6 @@ def main(
     profile: Optional[Path] = None,
     draft_checkpoint_path: Optional[Path] = None,
     speculate_k: int = 5,
-    use_sdpa=False,
     device='cuda',
 ) -> None:
     """Generates text samples based on a pre-trained Transformer model and tokenizer.
@@ -374,7 +360,6 @@ def main(
                 max_new_tokens,
                 draft_model=draft_model,
                 speculate_k=speculate_k,
-                use_sdpa=use_sdpa,
                 interactive=interactive,
                 callback=callback,
                 temperature=temperature,
@@ -428,12 +413,11 @@ if __name__ == '__main__':
     parser.add_argument('--profile', type=Path, default=None, help='Profile path.')
     parser.add_argument('--speculate_k', type=int, default=5, help='Speculative execution depth.')
     parser.add_argument('--draft_checkpoint_path', type=Path, default=None, help='Draft checkpoint path.')
-    parser.add_argument('--use_sdpa', action='store_true', help='Whether to use SDPA')
     parser.add_argument('--device', type=str, default="cuda", help='device to use')
 
     args = parser.parse_args()
     main(
         args.prompt, args.interactive, args.num_samples, args.max_new_tokens, args.top_k,
         args.temperature, args.checkpoint_path, args.compile, args.compile_prefill, args.profile, args.draft_checkpoint_path,
-        args.speculate_k, args.use_sdpa, args.device
+        args.speculate_k, args.device
     )
