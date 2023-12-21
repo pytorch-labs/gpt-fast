@@ -1,0 +1,81 @@
+---
+minimum_pre_commit_version: 2.16.0
+exclude: >
+  (?x)^(
+      .+/.venv/.+|.+/dist/.+|.+/.autovenv|.+/docs/|.github
+      ^\.venv/.*$|^\.git/.*$|^\.mypy_cache/.*$|^\.pytest_cache/.*$|^\.hypothesis/.*$|^\.nox/.*$|
+  )$
+fail_fast: true
+default_language_version:
+  python: python3
+default_stages:
+  - prepare-commit-msg
+  - commit
+  # - push
+ci:
+  autofix_commit_msg: |
+    [pre-commit.ci] auto fixes from pre-commit.com hooks
+    for more information, see https://pre-commit.ci
+  autofix_prs: true
+  autoupdate_branch: ""
+  autoupdate_commit_msg: "[pre-commit.ci] pre-commit autoupdate"
+  autoupdate_schedule: weekly
+  skip: []
+  submodules: false
+repos:
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v4.5.0
+    hooks:
+      - id: check-case-conflict
+      - id: check-merge-conflict
+        stages:
+          - commit
+      - id: check-added-large-files
+        args: [--maxkb=1000]
+        stages:
+          - commit
+      - id: detect-aws-credentials
+        args:
+          - --allow-missing-credentials
+      - id: fix-encoding-pragma
+        args:
+          - --remove
+      - id: detect-private-key
+      - id: destroyed-symlinks
+      - id: mixed-line-ending
+      - id: trailing-whitespace
+      - id: check-toml
+      - id: end-of-file-fixer
+        description: Ensures that a file is either empty, or ends with one newline.
+        exclude_types: [sql]
+
+  # Python: Black formatter
+  - repo: https://github.com/psf/black
+    rev: 23.11.0
+    hooks:
+      - id: black
+        args: [--safe, --quiet, --config=./pyproject.toml]
+        files: \.pyi?$
+        exclude: .github/
+        # override until resolved: https://github.com/psf/black/issues/402
+        types: []
+
+  # Yaml: lint
+  - repo: https://github.com/adrienverge/yamllint
+    rev: v1.33.0
+    hooks:
+      - id: yamllint
+        name: Check YAML files with yamllint
+        entry: yamllint -c yamllint-config.yml # --strict
+        types: [yaml]
+
+  # Python - isort to sort imports in Python files
+  - repo: https://github.com/timothycrosley/isort
+    rev: 5.12.0
+    hooks:
+      - id: isort
+        name: Run isort to sort imports in Python files
+        args: [--profile, black]
+        files: \.py$
+        # To keep consistent with the global isort skip config defined in setup.cfg
+        exclude: ^build/.*$|^.tox/.*$||^\.eggs/.*$|^\.pytest_cache/.*$

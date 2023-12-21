@@ -1,0 +1,31 @@
+---
+# https://yamllint.readthedocs.io/en/stable/
+extends: default
+
+yaml-files:
+  - '*.yaml'
+  - '*.yml'
+  - .yamllint
+
+rules:
+  line-length:
+    max: 140
+    # level: warning
+  brackets: enable
+  colons: enable
+  commas: enable
+  empty-lines: enable
+  empty-values: disable
+  key-duplicates: disable
+  hyphens: enable
+  key-ordering: disable
+  new-line-at-end-of-file: enable
+  new-lines: enable
+  # quoted-strings: disable
+  truthy:
+    level: warning
+  indentation:
+    spaces: 2
+    indent-sequences: true
+ignore: |
+  .venv/

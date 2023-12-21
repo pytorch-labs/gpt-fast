@@ -20,6 +20,7 @@ from model import Transformer
 
 ##### Quantization Primitives ######
 
+
 def dynamically_quantize_per_channel(x, quant_min, quant_max, target_dtype):
     # assumes symmetric quantization
     # assumes axis == 0
@@ -54,6 +55,7 @@ def dynamically_quantize_per_channel(x, quant_min, quant_max, target_dtype):
 
     return quant, scales, zero_points
 
+
 def get_group_qparams(w, n_bit=4, groupsize=128):
     # needed for GPTQ with padding
     if groupsize > w.shape[-1]:
@@ -70,9 +72,7 @@ def get_group_qparams(w, n_bit=4, groupsize=128):
     max_int = 2**n_bit - 1
     scales = (max_val - min_val).clamp(min=1e-6) / max_int
     zeros = min_val + scales * (2 ** (n_bit - 1))
-    return scales.to(torch.bfloat16).reshape(w.shape[0], -1), zeros.to(
-        torch.bfloat16
-    ).reshape(w.shape[0], -1)
+    return scales.to(torch.bfloat16).reshape(w.shape[0], -1), zeros.to(torch.bfloat16).reshape(w.shape[0], -1)
 
 
 def pack_scales_and_zeros(scales, zeros):
@@ -115,14 +115,7 @@ def group_quantize_tensor_from_qparams(w, scales, zeros, n_bit=4, groupsize=128)
     min_val = zeros - scales * (2 ** (n_bit - 1))
     max_int = 2**n_bit - 1
     min_int = 0
-    w_int32 = (
-        to_quant.sub(min_val)
-        .div(scales)
-        .round()
-        .clamp_(min_int, max_int)
-        .to(torch.int32)
-        .reshape_as(w)
-    )
+    w_int32 = to_quant.sub(min_val).div(scales).round().clamp_(min_int, max_int).to(torch.int32).reshape_as(w)
 
     return w_int32
 
@@ -134,9 +127,7 @@ def group_quantize_tensor(w, n_bit=4, groupsize=128):
     return w_int32, scales_and_zeros
 
 
-def group_dequantize_tensor_from_qparams(
-    w_int32, scales, zeros, n_bit=4, groupsize=128
-):
+def group_dequantize_tensor_from_qparams(w_int32, scales, zeros, n_bit=4, groupsize=128):
     assert groupsize > 1
     # needed for GPTQ single column dequantize
     if groupsize > w_int32.shape[-1] and scales.shape[-1] == 1:
@@ -148,17 +139,14 @@ def group_dequantize_tensor_from_qparams(
     scales = scales.reshape(-1, 1)
     zeros = zeros.reshape(-1, 1)
 
-    w_dq = (
-        w_int32_grouped.sub(2 ** (n_bit - 1)).mul(scales).add(zeros).reshape_as(w_int32)
-    )
+    w_dq = w_int32_grouped.sub(2 ** (n_bit - 1)).mul(scales).add(zeros).reshape_as(w_int32)
     return w_dq
 
 
 def group_dequantize_tensor(w_int32, scales_and_zeros, n_bit=4, groupsize=128):
     scales, zeros = unpack_scales_and_zeros(scales_and_zeros)
-    return group_dequantize_tensor_from_qparams(
-        w_int32, scales, zeros, n_bit, groupsize
-    )
+    return group_dequantize_tensor_from_qparams(w_int32, scales, zeros, n_bit, groupsize)
+
 
 class QuantHandler:
     def __init__(self, mod):
@@ -169,6 +157,7 @@ class QuantHandler:
 
     def convert_for_runtime(self) -> "nn.Module":
         pass
+
 
 class GPTQQuantHandler(QuantHandler):
     """
@@ -232,6 +221,7 @@ class GPTQQuantHandler(QuantHandler):
             names_and_values_dict: a dictionary mapping the name of the parameters of the quantized module to the
             corresponding quantized weights and qparams.
     """
+
     def __init__(self):
         assert self.mod is not None
         assert self.get_qparams_func is not None
@@ -241,7 +231,9 @@ class GPTQQuantHandler(QuantHandler):
         assert self.make_names_and_values_dict_func is not None
 
     @staticmethod
-    def get_inputs(model, tokenizer, calibration_tasks, calibration_limit, calibration_seq_length, pad_calibration_inputs) -> "MultiInput":
+    def get_inputs(
+        model, tokenizer, calibration_tasks, calibration_limit, calibration_seq_length, pad_calibration_inputs
+    ) -> "MultiInput":
         input_recorder = InputRecorder(
             model,
             tokenizer,
@@ -271,7 +263,9 @@ class GPTQQuantHandler(QuantHandler):
         calibration_seq_length,
         pad_calibration_inputs,
     ) -> "StateDict":
-        inputs = GPTQQuantHandler.get_inputs(self.mod, tokenizer, calibration_tasks, calibration_limit, calibration_seq_length, pad_calibration_inputs)
+        inputs = GPTQQuantHandler.get_inputs(
+            self.mod, tokenizer, calibration_tasks, calibration_limit, calibration_seq_length, pad_calibration_inputs
+        )
         print("Tracing model for GPTQ")
         GPTQ_runner = GenericGPTQRunner(
             self.mod,
@@ -285,7 +279,7 @@ class GPTQQuantHandler(QuantHandler):
             self.dequantize_func,
             self.combine_qparams_list_func,
             self.make_names_and_values_dict_func,
-            self.skip_layer_func
+            self.skip_layer_func,
         )
 
         print("Applying GPTQ to weights")
@@ -295,7 +289,9 @@ class GPTQQuantHandler(QuantHandler):
     def convert_for_runtime(self) -> "nn.Module":
         pass
 
+
 ##### Weight-only int8 per-channel quantized code ######
+
 
 def replace_linear_weight_only_int8_per_channel(module):
     for name, child in module.named_children():
@@ -303,6 +299,7 @@ def replace_linear_weight_only_int8_per_channel(module):
             setattr(module, name, WeightOnlyInt8Linear(child.in_features, child.out_features))
         else:
             replace_linear_weight_only_int8_per_channel(child)
+
 
 class WeightOnlyInt8QuantHandler:
     def __init__(self, mod):
@@ -330,8 +327,7 @@ class WeightOnlyInt8Linear(torch.nn.Module):
     out_features: int
     weight: torch.Tensor
 
-    def __init__(self, in_features: int, out_features: int, bias: bool = True,
-                 device=None, dtype=None) -> None:
+    def __init__(self, in_features: int, out_features: int, bias: bool = True, device=None, dtype=None) -> None:
         factory_kwargs = {'device': device, 'dtype': dtype}
         super().__init__()
         self.in_features = in_features
@@ -342,12 +338,12 @@ class WeightOnlyInt8Linear(torch.nn.Module):
     def forward(self, input: torch.Tensor) -> torch.Tensor:
         return F.linear(input, self.weight.to(dtype=input.dtype)) * self.scales
 
+
 ##### weight only int4 per channel groupwise quantized code ######
 
+
 def prepare_int4_weight_and_scales_and_zeros(weight_bf16, groupsize, inner_k_tiles):
-    weight_int32, scales_and_zeros = group_quantize_tensor(
-        weight_bf16, n_bit=4, groupsize=groupsize
-    )
+    weight_int32, scales_and_zeros = group_quantize_tensor(weight_bf16, n_bit=4, groupsize=groupsize)
     weight_int4pack = torch.ops.aten._convert_weight_to_int4pack(weight_int32, inner_k_tiles)
     return weight_int4pack, scales_and_zeros
 
@@ -361,22 +357,39 @@ def linear_forward_int4(x, weight_int4pack, scales_and_zeros, out_features, grou
     return c
 
 
-def _check_linear_int4_k(k, groupsize = 1, inner_k_tiles = 1):
+def _check_linear_int4_k(k, groupsize=1, inner_k_tiles=1):
     return k % groupsize == 0 and k % (inner_k_tiles * 16) == 0
+
 
 def replace_linear_int4(module, groupsize, inner_k_tiles, padding):
     for name, child in module.named_children():
         if isinstance(child, nn.Linear):
             if _check_linear_int4_k(child.in_features, groupsize, inner_k_tiles):
-                setattr(module, name, WeightOnlyInt4Linear(
-                    child.in_features, child.out_features, bias=False,
-                    groupsize=groupsize, inner_k_tiles=inner_k_tiles, padding=False,
-                ))
+                setattr(
+                    module,
+                    name,
+                    WeightOnlyInt4Linear(
+                        child.in_features,
+                        child.out_features,
+                        bias=False,
+                        groupsize=groupsize,
+                        inner_k_tiles=inner_k_tiles,
+                        padding=False,
+                    ),
+                )
             elif padding:
-                setattr(module, name, WeightOnlyInt4Linear(
-                    child.in_features, child.out_features, bias=False,
-                    groupsize=groupsize, inner_k_tiles=inner_k_tiles, padding=True,
-                ))
+                setattr(
+                    module,
+                    name,
+                    WeightOnlyInt4Linear(
+                        child.in_features,
+                        child.out_features,
+                        bias=False,
+                        groupsize=groupsize,
+                        inner_k_tiles=inner_k_tiles,
+                        padding=True,
+                    ),
+                )
         else:
             replace_linear_int4(child, groupsize, inner_k_tiles, padding)
 
@@ -406,12 +419,15 @@ class WeightOnlyInt4QuantHandler:
                     if self.padding:
                         from model import find_multiple
                         import torch.nn.functional as F
+
                         print(f"warning: {fqn} is padded to satisfy in_features % 1024 == 0")
                         padded_in_features = find_multiple(in_features, 1024)
                         weight = F.pad(weight, pad=(0, padded_in_features - in_features))
                     else:
-                        print(f"warning: {fqn} is skipped, int4 requires that in_features is 32, 64, or is divisible by 1024, " +
-                            "and that groupsize and inner_k_tiles*16 evenly divide into it")
+                        print(
+                            f"warning: {fqn} is skipped, int4 requires that in_features is 32, 64, or is divisible by 1024, "
+                            + "and that groupsize and inner_k_tiles*16 evenly divide into it"
+                        )
                         continue
                 weight_int4pack, scales_and_zeros = prepare_int4_weight_and_scales_and_zeros(
                     weight.to(torch.bfloat16).to('cuda'), self.groupsize, self.inner_k_tiles
@@ -425,24 +441,28 @@ class WeightOnlyInt4QuantHandler:
         replace_linear_int4(self.mod, self.groupsize, self.inner_k_tiles, self.padding)
         return self.mod
 
+
 class WeightOnlyInt4GPTQQuantHandler(GPTQQuantHandler):
     def __init__(self, mod, groupsize=128, inner_k_tiles=8, padding=True):
         from model import find_multiple
+
         self.mod = mod
         self.groupsize = groupsize
         self.inner_k_tiles = inner_k_tiles
         self.padding = padding
         self.get_qparams_func = lambda w: get_group_qparams(w, 4, groupsize)
-        self.quantize_func = lambda w, qparams: \
-            group_quantize_tensor_from_qparams(w, qparams[0], qparams[1], 4, groupsize)
-        self.dequantize_func = lambda q, qparams: \
-            group_dequantize_tensor_from_qparams(q, qparams[0], qparams[1], 4, groupsize).float()
-        self.combine_qparams_list_func = lambda qparams_list: \
-            [torch.cat(x, dim=1) for x in zip(*qparams_list)]
+        self.quantize_func = lambda w, qparams: group_quantize_tensor_from_qparams(
+            w, qparams[0], qparams[1], 4, groupsize
+        )
+        self.dequantize_func = lambda q, qparams: group_dequantize_tensor_from_qparams(
+            q, qparams[0], qparams[1], 4, groupsize
+        ).float()
+        self.combine_qparams_list_func = lambda qparams_list: [torch.cat(x, dim=1) for x in zip(*qparams_list)]
         # skip unless padding=True or its correctly sized
         self.skip_layer_func = lambda linear_weight: not (
             _check_linear_int4_k(linear_weight.shape[-1], groupsize, inner_k_tiles) or padding
         )
+
         # we need to do the padding here, both for q and the qparams if necessary
         def make_names_and_values_dict_func(q, qparams):
             k = q.shape[1]
@@ -453,15 +473,16 @@ class WeightOnlyInt4GPTQQuantHandler(GPTQQuantHandler):
             scales_and_zeros = pack_scales_and_zeros(*qparams)
             # how many new groups we need for padded weight
             delta_groups = new_k // groupsize - scales_and_zeros.shape[0]
-            final_s_and_z = F.pad(scales_and_zeros, pad=(0,0,0,0,0, delta_groups), value=1)
+            final_s_and_z = F.pad(scales_and_zeros, pad=(0, 0, 0, 0, 0, delta_groups), value=1)
             return {"weight": final_q, "scales_and_zeros": final_s_and_z}
+
         self.make_names_and_values_dict_func = make_names_and_values_dict_func
         super().__init__()
-
 
     def convert_for_runtime(self):
         replace_linear_int4(self.mod, self.groupsize, self.inner_k_tiles, self.padding)
         return self.mod
+
 
 class WeightOnlyInt4Linear(torch.nn.Module):
     __constants__ = ['in_features', 'out_features']
@@ -470,13 +491,21 @@ class WeightOnlyInt4Linear(torch.nn.Module):
     weight: torch.Tensor
 
     def __init__(
-            self, in_features: int, out_features: int,
-            bias=True, device=None, dtype=None, groupsize: int = 128, inner_k_tiles: int = 8, padding: bool = True,
+        self,
+        in_features: int,
+        out_features: int,
+        bias=True,
+        device=None,
+        dtype=None,
+        groupsize: int = 128,
+        inner_k_tiles: int = 8,
+        padding: bool = True,
     ) -> None:
         super().__init__()
         self.padding = padding
         if padding:
             from model import find_multiple
+
             self.origin_in_features = in_features
             in_features = find_multiple(in_features, 1024)
 
@@ -490,22 +519,21 @@ class WeightOnlyInt4Linear(torch.nn.Module):
         assert in_features % (inner_k_tiles * 16) == 0, "require in_features % (innerKTiles * 16) == 0"
         self.register_buffer(
             "weight",
-            torch.empty((out_features // 8, in_features // (inner_k_tiles * 16), 32, inner_k_tiles // 2), dtype=torch.int32)
+            torch.empty(
+                (out_features // 8, in_features // (inner_k_tiles * 16), 32, inner_k_tiles // 2), dtype=torch.int32
+            ),
         )
         self.register_buffer(
-            "scales_and_zeros",
-            torch.empty((in_features // groupsize, out_features, 2), dtype=torch.bfloat16)
+            "scales_and_zeros", torch.empty((in_features // groupsize, out_features, 2), dtype=torch.bfloat16)
         )
 
     def forward(self, input: torch.Tensor) -> torch.Tensor:
         input = input.to(torch.bfloat16)
         if self.padding:
             import torch.nn.functional as F
+
             input = F.pad(input, pad=(0, self.in_features - self.origin_in_features))
-        return linear_forward_int4(
-            input,
-            self.weight, self.scales_and_zeros, self.out_features, self.groupsize
-        )
+        return linear_forward_int4(input, self.weight, self.scales_and_zeros, self.out_features, self.groupsize)
 
 
 def quantize(
@@ -518,7 +546,7 @@ def quantize(
     calibration_limit: int = 1000,
     calibration_seq_length: int = 100,
     pad_calibration_inputs: bool = False,
-    percdamp: float = .01,
+    percdamp: float = 0.01,
     blocksize: int = 128,
     label: str = '',
 ) -> None:
@@ -571,7 +599,7 @@ def quantize(
             calibration_tasks,
             calibration_limit,
             calibration_seq_length,
-            pad_calibration_inputs
+            pad_calibration_inputs,
         )
 
         dir_name = checkpoint_path.parent
@@ -582,24 +610,64 @@ def quantize(
 
     quantize_path = dir_name / new_base_name
     print(f"Writing quantized weights to {quantize_path}")
-    quantize_path.unlink(missing_ok=True) # remove existing file if one already there
+    quantize_path.unlink(missing_ok=True)  # remove existing file if one already there
     torch.save(quantized_state_dict, quantize_path)
     print(f"Quantization complete took {time.time() - t0:.02f} seconds")
     return
 
+
 if __name__ == '__main__':
     import argparse
+
     parser = argparse.ArgumentParser(description='Quantize a model.')
-    parser.add_argument('--checkpoint_path', type=Path, default=Path("checkpoints/meta-llama/Llama-2-7b-chat-hf/model.pth"), help='Path to the model checkpoint to be quantized.')
-    parser.add_argument('--mode', '-q', type=str, default='int8', choices=['int8', 'int4', 'int4-gptq'], help='type of quantization to perform')
+    parser.add_argument(
+        '--checkpoint_path',
+        type=Path,
+        default=Path("checkpoints/meta-llama/Llama-2-7b-chat-hf/model.pth"),
+        help='Path to the model checkpoint to be quantized.',
+    )
+    parser.add_argument(
+        '--mode',
+        '-q',
+        type=str,
+        default='int8',
+        choices=['int8', 'int4', 'int4-gptq'],
+        help='type of quantization to perform',
+    )
     parser.add_argument('--groupsize', type=int, default=32, help='Group size for int4 quantization.')
-    parser.add_argument('--calibration_tasks', type=str, nargs='+', default=['hellaswag'], help='tasks to do gptq calibration on, if doing gptq')
-    parser.add_argument('--calibration_limit', type=int, default=1000, help='number of samples to use for gptq calibration')
-    parser.add_argument('--calibration_seq_length', type=int, default=100, help='length of sequences to use for gptq calibration')
-    parser.add_argument('--pad_calibration_inputs', type=bool, default=False, help='pads sequences shorter than calibration_seq_length to that length, yielding more calibration inputs but running much slower')
-    parser.add_argument('--percdamp', type=float, default=.01, help='gptq percentage dampening')
+    parser.add_argument(
+        '--calibration_tasks',
+        type=str,
+        nargs='+',
+        default=['hellaswag'],
+        help='tasks to do gptq calibration on, if doing gptq',
+    )
+    parser.add_argument(
+        '--calibration_limit', type=int, default=1000, help='number of samples to use for gptq calibration'
+    )
+    parser.add_argument(
+        '--calibration_seq_length', type=int, default=100, help='length of sequences to use for gptq calibration'
+    )
+    parser.add_argument(
+        '--pad_calibration_inputs',
+        type=bool,
+        default=False,
+        help='pads sequences shorter than calibration_seq_length to that length, yielding more calibration inputs but running much slower',
+    )
+    parser.add_argument('--percdamp', type=float, default=0.01, help='gptq percentage dampening')
     parser.add_argument('--blocksize', type=int, default=128, help='blocksize for gptq')
     parser.add_argument('--label', type=str, default='_', help='label to add to output filename')
 
     args = parser.parse_args()
-    quantize(args.checkpoint_path, args.mode, args.groupsize, args.calibration_tasks, args.calibration_limit, args.calibration_seq_length, args.pad_calibration_inputs, args.percdamp, args.blocksize, args.label)
+    quantize(
+        args.checkpoint_path,
+        args.mode,
+        args.groupsize,
+        args.calibration_tasks,
+        args.calibration_limit,
+        args.calibration_seq_length,
+        args.pad_calibration_inputs,
+        args.percdamp,
+        args.blocksize,
+        args.label,
+    )

@@ -57,11 +57,7 @@ def convert_hf_checkpoint(
 
     def permute(w, n_head):
         dim = config.dim
-        return (
-            w.view(n_head, 2, config.head_dim // 2, dim)
-            .transpose(1, 2)
-            .reshape(config.head_dim * n_head, dim)
-        )
+        return w.view(n_head, 2, config.head_dim // 2, dim).transpose(1, 2).reshape(config.head_dim * n_head, dim)
 
     merged_result = {}
     for file in sorted(bin_files):
@@ -95,8 +91,10 @@ def convert_hf_checkpoint(
     print(f"Saving checkpoint to {checkpoint_dir / 'model.pth'}")
     torch.save(final_result, checkpoint_dir / "model.pth")
 
+
 if __name__ == '__main__':
     import argparse
+
     parser = argparse.ArgumentParser(description='Convert HuggingFace checkpoint.')
     parser.add_argument('--checkpoint_dir', type=Path, default=Path("checkpoints/meta-llama/llama-2-7b-chat-hf"))
     parser.add_argument('--model_name', type=str, default=None)
