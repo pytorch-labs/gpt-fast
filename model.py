@@ -29,6 +29,7 @@ class ModelArgs:
     head_dim: int = 64
     rope_base: float = 10000
     norm_eps: float = 1e-5
+    scaling_factor: float = 1.0
 
     def __post_init__(self):
         if self.n_local_heads == -1:
@@ -50,7 +51,12 @@ class ModelArgs:
 
 
 transformer_configs = {
-    "CodeLlama-7b-Python-hf": dict(block_size=16384, vocab_size=32000, n_layer=32, dim = 4096, rope_base=1000000),
+    "TinyLlama-1.1B-intermediate-step-480k-1T": dict(block_size=2048, vocab_size=32000, intermediate_size=5632, n_layer=22, n_head=32, n_local_heads=4, dim=2048),
+    "deepseek-coder-1.3b-instruct": dict(block_size=16384, vocab_size=32256, intermediate_size=5504, n_layer=24, n_head=16, dim=2048, norm_eps=1e-6, rope_base = 100000, scaling_factor=4.0),
+    "deepseek-coder-6.7b-base":dict(block_size=16384, vocab_size=32256, intermediate_size=11008, norm_eps=1e-6, rope_base = 100000, scaling_factor=4.0),
+    "deepseek-coder-6.7b-instruct":dict(block_size=16384, vocab_size=32256, intermediate_size=11008, norm_eps=1e-6, rope_base = 100000, scaling_factor=4.0),
+    "deepseek-coder-33b-instruct":dict(block_size=16384, vocab_size=32256, intermediate_size=19200, n_head=56, n_local_heads=8, n_layer=62, dim=7168,  norm_eps=1e-6, rope_base = 100000, scaling_factor=4.0),
+    "CodeLlama-7b-Python-hf": dict(block_size=16384, vocab_size=32000, n_layer=32, n_head=64, n_local_heads=8, dim=4096, rope_base=1000000),
     "7B": dict(n_layer=32, n_head=32, dim=4096),
     "13B": dict(n_layer=40, n_head=40, dim=5120),
     "30B": dict(n_layer=60, n_head=52, dim=6656),
@@ -101,7 +107,7 @@ class Transformer(nn.Module):
         for b in self.layers:
             b.attention.kv_cache = KVCache(max_batch_size, max_seq_length, self.config.n_local_heads, head_dim)
 
-        self.freqs_cis = precompute_freqs_cis(self.config.block_size, self.config.dim // self.config.n_head, self.config.rope_base)
+        self.freqs_cis = precompute_freqs_cis(self.config.block_size, self.config.dim // self.config.n_head, self.config.rope_base, self.config.scaling_factor)
         self.causal_mask = torch.tril(torch.ones(self.max_seq_length, self.max_seq_length, dtype=torch.bool))
 
     def forward(self, idx: Tensor, input_pos: Optional[Tensor] = None) -> Tensor:
@@ -213,10 +219,10 @@ class RMSNorm(nn.Module):
 
 
 def precompute_freqs_cis(
-    seq_len: int, n_elem: int, base: int = 10000
+    seq_len: int, n_elem: int, base: int = 10000, scaling_factor: float = 1.0
 ) -> Tensor:
     freqs = 1.0 / (base ** (torch.arange(0, n_elem, 2)[: (n_elem // 2)].float() / n_elem))
-    t = torch.arange(seq_len, device=freqs.device)
+    t = torch.arange(seq_len, device=freqs.device) / scaling_factor
     freqs = torch.outer(t, freqs)
     freqs_cis = torch.polar(torch.ones_like(freqs), freqs)
     cache = torch.stack([freqs_cis.real, freqs_cis.imag], dim=-1)

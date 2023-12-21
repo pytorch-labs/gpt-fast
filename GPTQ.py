@@ -71,7 +71,7 @@ try:
 
         @property
         def eot_token_id(self):
-            return self._tokenizer.eos_id()
+            return self._tokenizer.eos_token_id
 
         @property
         def max_length(self):
@@ -91,7 +91,7 @@ try:
 
         def tok_encode(self, string: str):
             encoded = encode_tokens(
-                self._tokenizer, string, bos=True, eos=False, device=self._device
+                self._tokenizer, string, bos=True, device=self._device
             )
             # encoded is a pytorch tensor, but some internal logic in the
             # eval harness expects it to be a list instead

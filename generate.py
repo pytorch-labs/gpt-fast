@@ -16,7 +16,7 @@ import torch._inductor.config
 torch._inductor.config.coordinate_descent_tuning = True
 torch._inductor.config.triton.unique_kernel_names = True
 torch._inductor.config.fx_graph_cache = True # Experimental feature to reduce compilation times, will be on by default in future
-
+from transformers import AutoTokenizer
 
 # support running without installing as a package
 wd = Path(__file__).parent.parent.resolve()
@@ -136,6 +136,7 @@ def generate(
     draft_model: Transformer,
     speculate_k: Optional[int] = 8,
     callback = lambda x: x,
+    window_size: int = 0,
     **sampling_kwargs
 ) -> torch.Tensor:
     """
@@ -146,10 +147,8 @@ def generate(
     # create an empty tensor of the expected final shape and fill in the current tokens
     T = prompt.size(0)
     T_new = T + max_new_tokens
-    if interactive:
-        max_seq_length = 350
-    else:
-        max_seq_length = min(T_new, model.config.block_size)
+    max_seq_length = min(T_new, model.config.block_size)
+    print(f"Max seq length: {max_seq_length}")
 
     device, dtype = prompt.device, prompt.dtype
     max_seq_length = max_seq_length + speculate_k + 1 if is_speculative else max_seq_length
@@ -185,9 +184,21 @@ def generate(
             num_added = min(T_new - input_pos - 1, len(next_tokens))
             seq[input_pos + 1 : input_pos + num_added + 1] = next_tokens[: num_added]
             for i in next_tokens[: num_added,]:
-                callback(i)
+                if callback(i):
+                    break
             input_pos = input_pos + num_added
             next_token = next_tokens[-1]
+
+            #if input_pos > T_new - 2:
+            if False:
+                print("Speculative decoding hit max length, now windowing")
+                # windowing
+                #slide the first window_size tokens to the left
+                input_pos = input_pos - window_size
+                seq[:T_new - input_pos] = seq[input_pos:T_new]
+                prefill(model, seq, input_pos, **sampling_kwargs)
+                prefill(draft_model, prompt.view(1, -1), input_pos, **sampling_kwargs)
+
     else:
         generated_tokens, _ = decode_n_tokens(model, next_token.view(1, -1), input_pos, max_new_tokens - 1, callback=callback, **sampling_kwargs)
         seq[T + 1:] = torch.cat(generated_tokens)
@@ -199,8 +210,11 @@ def generate(
 
 def encode_tokens(tokenizer, string, bos=True, device='cuda'):
     tokens = tokenizer.encode(string)
-    if bos:
-        tokens = [tokenizer.bos_id()] + tokens
+    if bos is False and tokens[0] == tokenizer.bos_token_id:
+        tokens = tokens[1:]
+    elif bos and tokens[0] != tokenizer.bos_token_id:
+        tokens = [tokenizer.bos_token_id] + tokens
+
     return torch.tensor(tokens, dtype=torch.int, device=device)
 
 def _load_model(checkpoint_path, device, precision, use_tp):
@@ -222,8 +236,10 @@ def _load_model(checkpoint_path, device, precision, use_tp):
         simple_quantizer = WeightOnlyInt4QuantHandler(model, groupsize)
         model = simple_quantizer.convert_for_runtime()
 
-    checkpoint = torch.load(str(checkpoint_path), mmap=True, weights_only=True)
-    model.load_state_dict(checkpoint, assign=True)
+    # if TP>1 the model is likely too big to fit into single device,
+    # and we are more likely to run out GPU memory before RAM.
+    checkpoint = torch.load(str(checkpoint_path), map_location=None if use_tp else device, mmap=True, weights_only=True)
+    model.load_state_dict(checkpoint, strict=True, assign=True)
 
     if use_tp:
         from tp import apply_tp
@@ -233,13 +249,11 @@ def _load_model(checkpoint_path, device, precision, use_tp):
     model = model.to(device=device, dtype=precision)
     return model.eval()
 
-B_INST, E_INST = "[INST]", "[/INST]"
-
 def main(
     prompt: str = "Hello, my name is",
     interactive: bool = False,
     num_samples: int = 5,
-    max_new_tokens: int = 100,
+    max_new_tokens: int = 1000,
     top_k: int = 200,
     temperature: float = 0.8,
     checkpoint_path: Path = Path("checkpoints/meta-Transformer/Transformer-2-7b-chat-hf/model.pth"),
@@ -253,8 +267,8 @@ def main(
     """
     assert checkpoint_path.is_file(), checkpoint_path
 
-    tokenizer_path = checkpoint_path.parent / "tokenizer.model"
-    assert tokenizer_path.is_file(), tokenizer_path
+    hf_name = "/".join(str(checkpoint_path.parent).split("/")[1:])
+    tokenizer = AutoTokenizer.from_pretrained(hf_name)
 
     global print
     rank = maybe_init_dist()
@@ -281,7 +295,6 @@ def main(
     torch.cuda.synchronize()
     print(f"Time to load model: {time.time() - t0:.02f} seconds")
 
-    tokenizer = SentencePieceProcessor(model_file=str(tokenizer_path))
     encoded = encode_tokens(tokenizer, prompt, bos=True, device=device)
     prompt_length = encoded.size(0)
 
@@ -299,7 +312,7 @@ def main(
         decode_one_token = torch.compile(decode_one_token, mode="reduce-overhead", fullgraph=True)
 
         # Uncomment to squeeze more perf out of prefill
-        if args.compile_prefill:
+        if compile_prefill:
             prefill = torch.compile(prefill, fullgraph=True, dynamic=True)
 
 
@@ -314,26 +327,30 @@ def main(
         if i >= 0 and interactive:
             prompt = input("What is your prompt? ")
             if is_chat:
-                prompt = f"{B_INST} {prompt.strip()} {E_INST}"
-            encoded = encode_tokens(tokenizer, prompt, bos=True, device=device)
+                encoded = tokenizer.apply_chat_template([{"role": "user", "content": prompt.strip()}], tokenize=True)
+            else:
+                encoded = encode_tokens(tokenizer, prompt, bos=True, device=device)
 
         if interactive and i >= 0:
             buffer = []
-            period_id = tokenizer.encode('.')[0]
             done_generating = False
-            def callback(x):
+            def callback(x)->bool:
                 nonlocal done_generating
                 if done_generating:
-                    return
-                buffer.append(tokenizer.decode([period_id] + x.tolist())[1:])
-                if x.item() == tokenizer.eos_id():
+                    return True
+                x = x.item()
+                buffer.append(tokenizer.decode([x]))
+                if x == tokenizer.eos_token_id:
+                    print("EOS")
                     done_generating = True
+
                 if len(buffer) == 4 or done_generating:
                     print(''.join(buffer), end='', flush=True)
                     buffer.clear()
+                return False
                 # print(, end='', flush=True)
         else:
-            callback = lambda x : x
+            callback = lambda x : False
         t0 = time.perf_counter()
         import contextlib
         if (i != num_samples - 1 or not profile) or (use_tp and rank != 0):
@@ -370,6 +387,7 @@ def main(
         else:
             print()
         tokens_generated = y.size(0) - prompt_length
+        print(f"{tokens_generated} tokens_generated")
         tokens_sec = tokens_generated / t
         aggregate_metrics['tokens_per_sec'].append(tokens_sec)
         print(f"Time for inference {i + 1}: {t:.02f} sec total, {tokens_sec:.02f} tokens/sec")
@@ -401,6 +419,7 @@ if __name__ == '__main__':
     parser.add_argument('--profile', type=Path, default=None, help='Profile path.')
     parser.add_argument('--speculate_k', type=int, default=5, help='Speculative execution depth.')
     parser.add_argument('--draft_checkpoint_path', type=Path, default=None, help='Draft checkpoint path.')
+    parser.add_argument('--window_size', type=int, default=0, help="Window size for speculative decoding.")
 
     args = parser.parse_args()
     main(

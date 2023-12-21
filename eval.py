@@ -18,6 +18,8 @@ torch._inductor.config.epilogue_fusion = False
 torch._inductor.config.triton.cudagraphs = True
 torch._dynamo.config.cache_size_limit = 100000
 
+from transformers import AutoTokenizer
+
 # support running without installing as a package
 wd = Path(__file__).parent.parent.resolve()
 sys.path.append(str(wd))
@@ -25,8 +27,6 @@ sys.path.append(str(wd))
 # hacky path setup for lm-evaluation-harness
 import os
 import sys
-
-from sentencepiece import SentencePieceProcessor
 
 from model import LLaMA
 
@@ -95,7 +95,7 @@ class SimpleGPTEvalWrapper(lm_eval.base.BaseLM):
 
     @property
     def eot_token_id(self):
-        return self._tokenizer.eos_id()
+        return self._tokenizer.eos_token_id
 
     @property
     def max_length(self):
@@ -114,8 +114,9 @@ class SimpleGPTEvalWrapper(lm_eval.base.BaseLM):
         return self._device
 
     def tok_encode(self, string: str):
+        from generate import encode_tokens
         encoded = encode_tokens(self._tokenizer,
-            string, bos=True, eos=False, device=self._device)
+            string, bos=True, device=self._device)
         # encoded is a pytorch tensor, but some internal logic in the
         # eval harness expects it to be a list instead
         # TODO: verify this for multi-batch as well
@@ -127,6 +128,7 @@ class SimpleGPTEvalWrapper(lm_eval.base.BaseLM):
         return decoded
 
     def _model_call(self, inps):
+        from generate import model_forward
         # TODO: make batches work
         inps = inps.squeeze(0)
 
@@ -203,11 +205,12 @@ def main(
         max_seq_length (Optional[int]): The maximum sequence length allowed for input text.
 
     """
-
+    from generate import _load_model, model_forward
     assert checkpoint_path.is_file(), checkpoint_path
 
-    tokenizer_path = checkpoint_path.parent / "tokenizer.model"
-    assert tokenizer_path.is_file(), tokenizer_path
+
+    hf_name = "/".join(str(checkpoint_path.parent).split("/")[1:])
+    tokenizer = AutoTokenizer.from_pretrained(hf_name)
 
     device = 'cuda'
     precision = torch.bfloat16
@@ -220,8 +223,6 @@ def main(
     print(f"Time to load model: {time.time() - t0:.02f} seconds.")
 
     model.eval()
-
-    tokenizer = SentencePieceProcessor(model_file=str(tokenizer_path))
 
     torch.manual_seed(1234)
 
