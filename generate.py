@@ -288,6 +288,17 @@ def main(
     torch.manual_seed(1234)
     model_size = sum([p.numel() * p.dtype.itemsize for p in itertools.chain(model.parameters(), model.buffers())])
     if compile:
+        if "dev" not in torch.__version__:
+            if use_tp:
+                raise RuntimeError(
+                    "Tensor-parallel + `torch.compile` requires the latest PyTorch nightly build "
+                    f"(currently installed version: {torch.__version__})"
+                )
+            print(
+                "\033[93m" + "To achieve maximum speedup from `torch.compile`, `gpt-fast` requires the latest PyTorch nightly build "
+                f"(currently installed version: {torch.__version__})" + "\033[0m"
+            )
+
         if is_speculative and use_tp:
             torch._inductor.config.triton.cudagraph_trees = False # Bug with cudagraph trees in this case
 
