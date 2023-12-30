@@ -290,6 +290,8 @@ def main(
     if compile:
         if is_speculative and use_tp:
             torch._inductor.config.triton.cudagraph_trees = False # Bug with cudagraph trees in this case
+        if model.config.moe:
+            torch._inductor.assert_indirect_indexing = False
 
         if is_speculative:
             global model_forward, logits_to_prob
