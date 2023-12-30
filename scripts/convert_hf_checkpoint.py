@@ -94,7 +94,7 @@ def convert_hf_checkpoint_llama(
     torch.save(final_result, checkpoint_dir / "model.pth")
 
 
-# @torch.inference_mode()
+@torch.inference_mode()
 def convert_hf_checkpoint_mixtral(
     *,
     checkpoint_dir: Path = Path("checkpoints/mistralai/Mixtral-8x7B-v0.1"),
