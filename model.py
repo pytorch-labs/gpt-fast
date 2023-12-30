@@ -29,6 +29,9 @@ class ModelArgs:
     head_dim: int = 64
     rope_base: float = 10000
     norm_eps: float = 1e-5
+    moe: bool = False
+    num_experts: int = 8
+    num_activated_experts: int = 2
 
     def __post_init__(self):
         if self.n_local_heads == -1:
@@ -50,6 +53,7 @@ class ModelArgs:
 
 
 transformer_configs = {
+    "Mixtral-8x7B-v0.1": dict(block_size=32768, n_layer=32, n_head=32, n_local_heads=8, dim=4096, intermediate_size=14336, rope_base=1000000.0, num_experts=8, num_activated_experts=2, moe=True),
     "CodeLlama-7b-Python-hf": dict(block_size=16384, vocab_size=32000, n_layer=32, dim = 4096, rope_base=1000000),
     "7B": dict(n_layer=32, n_head=32, dim=4096),
     "13B": dict(n_layer=40, n_head=40, dim=5120),
@@ -125,13 +129,19 @@ class TransformerBlock(nn.Module):
     def __init__(self, config: ModelArgs) -> None:
         super().__init__()
         self.attention = Attention(config)
-        self.feed_forward = FeedForward(config)
+        if config.moe:
+            self.block_sparse_moe = MOEFeedForward(config)
+        else:
+            self.feed_forward = FeedForward(config)
         self.ffn_norm = RMSNorm(config.dim, config.norm_eps)
         self.attention_norm = RMSNorm(config.dim, config.norm_eps)
 
     def forward(self, x: Tensor, input_pos: Tensor, freqs_cis: Tensor, mask: Tensor) -> Tensor:
         h = x + self.attention(self.attention_norm(x), freqs_cis, mask, input_pos)
-        out = h + self.feed_forward(self.ffn_norm(h))
+        if hasattr(self, "block_sparse_moe"):
+            out = h + self.block_sparse_moe(self.ffn_norm(h))
+        else:
+            out = h + self.feed_forward(self.ffn_norm(h))
         return out
 
 
@@ -196,6 +206,41 @@ class FeedForward(nn.Module):
 
     def forward(self, x: Tensor) -> Tensor:
         return self.w2(F.silu(self.w1(x)) * self.w3(x))
+
+
+class ConditionalFeedForward(nn.Module):
+    def __init__(self, config):
+        super().__init__()
+        self.w1 = nn.Parameter(torch.empty(config.num_experts, config.intermediate_size, config.dim))
+        self.w2 = nn.Parameter(torch.empty(config.num_experts, config.intermediate_size, config.dim))
+        self.w3 = nn.Parameter(torch.empty(config.num_experts, config.intermediate_size, config.dim))
+
+    @torch.compile(mode="reduce-overhead", fullgraph=True, dynamic=False)
+    def forward(self, x: Tensor, expert_indices: Tensor) -> Tensor:
+        w1_weights = self.w1[expert_indices].transpose(-1, -2) # [T, A, D, D]
+        w3_weights = self.w3[expert_indices].transpose(-1, -2) # [T, A, D, D]
+        w2_weights = self.w2[expert_indices]  # [T, A, D, D]
+        x1 = F.silu(torch.einsum('ti,taio -> tao', x, w1_weights))
+        x3 = torch.einsum('ti, taio -> tao', x, w3_weights)
+        expert_outs =  torch.einsum('tao, taoi -> tai', (x1 * x3), w2_weights)
+        return expert_outs
+
+
+class MOEFeedForward(nn.Module):
+    def __init__(self, config) -> None:
+        super().__init__()
+        self.gate = nn.Linear(config.dim, config.num_experts, bias=False)
+        self.cond_ffn = ConditionalFeedForward(config)
+        self.dim = config.dim
+    def forward(self, x: Tensor) -> Tensor:
+        x = x.view(-1, self.dim)
+        # T = num_tokens, E = num_experts, D = hidden dim, A = activated experts
+        # x: [T, D]
+        scores = self.gate(x) # [T, E]
+        expert_weights, expert_indices = torch.topk(scores, 2, dim=-1) # [T, A], [T, A]
+        expert_weights = expert_weights.softmax(dim=-1) # [T, A]
+        expert_outs = self.cond_ffn(x, expert_indices)
+        return torch.einsum('tai,ta -> ti', expert_outs, expert_weights)
 
 
 class RMSNorm(nn.Module):

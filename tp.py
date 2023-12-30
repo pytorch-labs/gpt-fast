@@ -11,7 +11,7 @@ import torch.distributed as dist
 from torch import nn
 from torch.distributed import _functional_collectives as funcol
 
-from model import Attention, FeedForward, Transformer
+from model import Attention, FeedForward, MOEFeedForward, Transformer
 from quantize import WeightOnlyInt4Linear
 
 
@@ -46,6 +46,12 @@ def maybe_init_dist() -> Optional[int]:
     dist.init_process_group(backend="nccl", rank=rank, world_size=world_size)
     return rank
 
+rank = _get_rank()
+world_size = _get_world_size()
+
+def shard(x, dim):
+    assert x.size(dim=dim) % world_size == 0
+    return torch.tensor_split(x, world_size, dim=dim)[rank]
 
 def _apply_tp_linear(linear: nn.Linear, style: str, weight_splits: List[int] = []) -> None:
     rank = _get_rank()
@@ -62,9 +68,6 @@ def _apply_tp_linear(linear: nn.Linear, style: str, weight_splits: List[int] = [
 
     # ensure we can shard evenly
     assert getattr(linear, size_attr) % world_size == 0
-    def shard(x, dim):
-        assert x.size(dim=dim) % world_size == 0
-        return torch.tensor_split(x, world_size, dim=dim)[rank]
 
     def shard_qkv(qkv, dim, weight_splits):
         q, k, v = qkv.split(weight_splits, dim=dim)
@@ -117,6 +120,21 @@ def _apply_tp_ffn(mlp: FeedForward) -> None:
         output, "sum", list(range(world_size))))
 
 
+def _apply_tp_moe_ffn(mlp: MOEFeedForward) -> None:
+    mlp.cond_ffn.w1 = nn.Parameter(shard(mlp.cond_ffn.w1, 1), requires_grad=False)
+    mlp.cond_ffn.w3 = nn.Parameter(shard(mlp.cond_ffn.w3, 1), requires_grad=False)
+    mlp.cond_ffn.w2 = nn.Parameter(shard(mlp.cond_ffn.w2, 1), requires_grad=False)
+
+    if hasattr(mlp.cond_ffn, "scales1"):
+        mlp.cond_ffn.scales1 = nn.Parameter(shard(mlp.cond_ffn.scales1, 1), requires_grad=False)
+        mlp.cond_ffn.scales3 = nn.Parameter(shard(mlp.cond_ffn.scales3, 1), requires_grad=False)
+        mlp.cond_ffn.scales2 = nn.Parameter(shard(mlp.cond_ffn.scales2, 1), requires_grad=False)
+
+    world_size = _get_world_size()
+    mlp.cond_ffn.register_forward_hook(lambda _module, _input, output: funcol.all_reduce(
+        output, "sum", list(range(world_size))))
+
+
 def _apply_tp_attn(attn: Attention) -> None:
     assert hasattr(attn, "wqkv")
     assert hasattr(attn, "wo")
@@ -127,6 +145,7 @@ def _apply_tp_attn(attn: Attention) -> None:
 
     # overwrite
     world_size = _get_world_size()
+    assert attn.n_head % world_size == 0, "assert attn.n_head % world_size == 0"
     attn.n_head = attn.n_head // world_size
     attn.dim = attn.dim // world_size
     attn.head_dim = attn.dim // attn.n_head
@@ -148,5 +167,8 @@ def apply_tp(model: Transformer) -> None:
     _apply_tp_Transformer(model)
     for block in model.layers:
         # Apply to MLP
-        _apply_tp_ffn(block.feed_forward)
+        if model.config.moe:
+            _apply_tp_moe_ffn(block.block_sparse_moe)
+        else:
+            _apply_tp_ffn(block.feed_forward)
         _apply_tp_attn(block.attention)
