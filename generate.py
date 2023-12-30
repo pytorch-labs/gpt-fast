@@ -209,8 +209,8 @@ def _load_model(checkpoint_path, device, precision, use_tp):
 
     if "int8" in str(checkpoint_path):
         print("Using int8 weight-only quantization!")
-        from quantize import WeightOnlyInt8QuantHandler
-        simple_quantizer = WeightOnlyInt8QuantHandler(model)
+        from quantize import WeightOnlyBit8QuantHandler
+        simple_quantizer = WeightOnlyBit8QuantHandler(model, torch.int8)
         model = simple_quantizer.convert_for_runtime()
 
     if "int4" in str(checkpoint_path):
