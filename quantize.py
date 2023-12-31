@@ -378,7 +378,6 @@ class ConditionalFeedForwardBit8(nn.Module):
         self.register_buffer("scales2", torch.empty(num_experts, intermediate_size, dtype=torch.bfloat16))
         self.register_buffer("scales3", torch.empty(num_experts, intermediate_size, dtype=torch.bfloat16))
 
-    @torch.compile(mode="reduce-overhead", fullgraph=True)
     def forward(self, x, expert_indices):
         w1_weights = (self.w1.to(x.dtype)[expert_indices] * self.scales1[expert_indices].to(x.dtype).unsqueeze(-1)).transpose(-1, -2)  # [T, A, D, D]
         w3_weights = (self.w3.to(x.dtype)[expert_indices] * self.scales3[expert_indices].to(x.dtype).unsqueeze(-1)).transpose(-1, -2)  # [T, A, D, D]
