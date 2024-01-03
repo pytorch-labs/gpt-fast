@@ -15,7 +15,7 @@ import torch._inductor.config
 
 torch._inductor.config.coordinate_descent_tuning = True
 torch._inductor.config.triton.unique_kernel_names = True
-torch._inductor.config.fx_graph_cache = True # Experimental feature to reduce compilation times, will be on by default in future
+#torch._inductor.config.fx_graph_cache = True # Experimental feature to reduce compilation times, will be on by default in future
 
 
 # support running without installing as a package
@@ -24,7 +24,8 @@ sys.path.append(str(wd))
 
 from sentencepiece import SentencePieceProcessor
 
-from model import Transformer
+#from model import Transformer
+from model_talking import Transformer
 from tp import maybe_init_dist
 
 
@@ -204,8 +205,8 @@ def encode_tokens(tokenizer, string, bos=True, device='cuda'):
     return torch.tensor(tokens, dtype=torch.int, device=device)
 
 def _load_model(checkpoint_path, device, precision, use_tp):
-    with torch.device('meta'):
-        model = Transformer.from_name(checkpoint_path.parent.name)
+    #with torch.device('meta'):
+    model = Transformer.from_name(checkpoint_path.parent.name)
 
     if "int8" in str(checkpoint_path):
         print("Using int8 weight-only quantization!")
@@ -223,7 +224,7 @@ def _load_model(checkpoint_path, device, precision, use_tp):
         model = simple_quantizer.convert_for_runtime()
 
     checkpoint = torch.load(str(checkpoint_path), mmap=True, weights_only=True)
-    model.load_state_dict(checkpoint, assign=True)
+    model.load_state_dict(checkpoint, assign=True, strict=False)
 
     if use_tp:
         from tp import apply_tp
@@ -231,6 +232,12 @@ def _load_model(checkpoint_path, device, precision, use_tp):
         apply_tp(model)
 
     model = model.to(device=device, dtype=precision)
+    #for n, p in model.named_parameters():
+    #    print(n,p.device, p.dtype)
+
+    for layer in model.layers:
+        if hasattr(layer.attention, 'dyn_w_proj'):
+            layer.attention.dyn_w_proj.merge_weights()
     return model.eval()
 
 B_INST, E_INST = "[INST]", "[/INST]"
@@ -265,7 +272,8 @@ def main(
             print = lambda *args, **kwargs: None
 
     device = 'cuda'
-    precision = torch.bfloat16
+    #precision = torch.bfloat16
+    precision = torch.float16
     is_speculative = draft_checkpoint_path is not None
     is_chat = "chat" in str(checkpoint_path)
 
