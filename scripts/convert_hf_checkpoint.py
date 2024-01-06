@@ -16,6 +16,7 @@ wd = Path(__file__).parent.parent.resolve()
 sys.path.append(str(wd))
 
 from model import ModelArgs
+import glob
 
 
 @torch.inference_mode()
@@ -30,30 +31,22 @@ def convert_hf_checkpoint(
     config = ModelArgs.from_name(model_name)
     print(f"Model config {config.__dict__}")
 
-    # Load the json file containing weight mapping
-    model_map_json = checkpoint_dir / "pytorch_model.bin.index.json"
-
-    assert model_map_json.is_file()
-
-    with open(model_map_json) as json_map:
-        bin_index = json.load(json_map)
-
     weight_map = {
-        "model.embed_tokens.weight": "tok_embeddings.weight",
-        "model.layers.{}.self_attn.q_proj.weight": "layers.{}.attention.wq.weight",
-        "model.layers.{}.self_attn.k_proj.weight": "layers.{}.attention.wk.weight",
-        "model.layers.{}.self_attn.v_proj.weight": "layers.{}.attention.wv.weight",
-        "model.layers.{}.self_attn.o_proj.weight": "layers.{}.attention.wo.weight",
-        'model.layers.{}.self_attn.rotary_emb.inv_freq': None,
-        'model.layers.{}.mlp.gate_proj.weight': 'layers.{}.feed_forward.w1.weight',
-        "model.layers.{}.mlp.up_proj.weight": "layers.{}.feed_forward.w3.weight",
-        "model.layers.{}.mlp.down_proj.weight": "layers.{}.feed_forward.w2.weight",
-        "model.layers.{}.input_layernorm.weight": "layers.{}.attention_norm.weight",
-        "model.layers.{}.post_attention_layernorm.weight": "layers.{}.ffn_norm.weight",
-        "model.norm.weight": "norm.weight",
-        "lm_head.weight": "output.weight",
+        "tok_embeddings.weight": "tok_embeddings.weight",
+        "layers.{}.attention.wq.weight": "layers.{}.attention.wq.weight",
+        "layers.{}.attention.wk.weight": "layers.{}.attention.wk.weight",
+        "layers.{}.attention.wv.weight": "layers.{}.attention.wv.weight",
+        "layers.{}.attention.wo.weight": "layers.{}.attention.wo.weight",
+        "layers.{}.block_sparse_moe.w1": "layers.{}.block_sparse_moe.cond_ffn.w1",
+        "layers.{}.block_sparse_moe.w2": "layers.{}.block_sparse_moe.cond_ffn.w2",
+        "layers.{}.block_sparse_moe.w3": "layers.{}.block_sparse_moe.cond_ffn.w3",
+        "layers.{}.block_sparse_moe.gate.weight": "layers.{}.block_sparse_moe.gate.weight",
+        "layers.{}.attention_norm.weight": "layers.{}.attention_norm.weight",
+        "layers.{}.ffn_norm.weight": "layers.{}.ffn_norm.weight",
+        "norm.weight": "norm.weight",
+        "output.weight": "output.weight",
     }
-    bin_files = {checkpoint_dir / bin for bin in bin_index["weight_map"].values()}
+    pt_files = glob.glob(str(checkpoint_dir / "*.pt"))
 
     def permute(w, n_head):
         dim = config.dim
@@ -64,13 +57,13 @@ def convert_hf_checkpoint(
         )
 
     merged_result = {}
-    for file in sorted(bin_files):
+    for file in sorted(pt_files):
         state_dict = torch.load(str(file), map_location="cpu", mmap=True, weights_only=True)
         merged_result.update(state_dict)
     final_result = {}
     for key, value in merged_result.items():
         if "layers" in key:
-            abstract_key = re.sub(r'(\d+)', '{}', key)
+            abstract_key = re.sub(r'.(\d+).', '.{}.', key)
             layer_num = re.search(r'\d+', key).group(0)
             new_key = weight_map[abstract_key]
             if new_key is None:
@@ -86,12 +79,18 @@ def convert_hf_checkpoint(
             q = final_result[key]
             k = final_result[key.replace("wq", "wk")]
             v = final_result[key.replace("wq", "wv")]
-            q = permute(q, config.n_head)
-            k = permute(k, config.n_local_heads)
+            # q = permute(q, config.n_head)
+            # k = permute(k, config.n_local_heads)
             final_result[key.replace("wq", "wqkv")] = torch.cat([q, k, v])
             del final_result[key]
             del final_result[key.replace("wq", "wk")]
             del final_result[key.replace("wq", "wv")]
+        if "w1" in key or "w2" in key or "w3" in key:
+            final_result[key] = final_result[key].reshape(config.num_experts, config.intermediate_size, config.dim).contiguous()
+        if "gate" in key:
+            final_result[key] = final_result[key].contiguous()
+        # if "w1" in key:
+        #     final_result[key] = final_result[key].reshape(config.num_experts, config.intermediate_size, config.dim)
     print(f"Saving checkpoint to {checkpoint_dir / 'model.pth'}")
     torch.save(final_result, checkpoint_dir / "model.pth")
 
