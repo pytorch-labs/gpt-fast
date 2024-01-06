@@ -33,10 +33,11 @@ def convert_hf_checkpoint(
     # Load the json file containing weight mapping
     model_map_json = checkpoint_dir / "pytorch_model.bin.index.json"
 
-    assert model_map_json.is_file()
-
-    with open(model_map_json) as json_map:
-        bin_index = json.load(json_map)
+    if model_map_json.is_file():
+        with open(model_map_json) as json_map:
+            bin_index = json.load(json_map)
+    else:
+        bin_index = None
 
     weight_map = {
         "model.embed_tokens.weight": "tok_embeddings.weight",
@@ -53,7 +54,13 @@ def convert_hf_checkpoint(
         "model.norm.weight": "norm.weight",
         "lm_head.weight": "output.weight",
     }
-    bin_files = {checkpoint_dir / bin for bin in bin_index["weight_map"].values()}
+    if bin_index is not None:
+        bin_files = {checkpoint_dir / bin for bin in bin_index["weight_map"].values()}
+    else:
+        bin_file = checkpoint_dir / "pytorch_model.bin"
+        assert bin_file.is_file(), "pytorch_model.bin not found"
+        bin_files = [bin_file]
+
 
     def permute(w, n_head):
         dim = config.dim
@@ -65,7 +72,10 @@ def convert_hf_checkpoint(
 
     merged_result = {}
     for file in sorted(bin_files):
-        state_dict = torch.load(str(file), map_location="cpu", mmap=True, weights_only=True)
+        if bin_index is not None: # Not TinyLlama
+            state_dict = torch.load(str(file), map_location="cpu", mmap=True, weights_only=True)
+        else:
+            state_dict = torch.load(str(file), map_location="cpu", mmap=True, weights_only=False)
         merged_result.update(state_dict)
     final_result = {}
     for key, value in merged_result.items():
