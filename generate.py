@@ -219,8 +219,8 @@ def _load_model(checkpoint_path, device, precision, use_tp):
 
     if "int8" in str(checkpoint_path):
         print("Using int8 weight-only quantization!")
-        from quantize import WeightOnlyInt8QuantHandler
-        simple_quantizer = WeightOnlyInt8QuantHandler(model)
+        from quantize import WeightOnlyBit8QuantHandler
+        simple_quantizer = WeightOnlyBit8QuantHandler(model, torch.int8)
         model = simple_quantizer.convert_for_runtime()
 
     if "int4" in str(checkpoint_path):
@@ -301,6 +301,8 @@ def main(
     if compile:
         if is_speculative and use_tp: # and ("cuda" in device):
             torch._inductor.config.triton.cudagraph_trees = False # Bug with cudagraph trees in this case
+        if model.config.moe:
+            torch._inductor.config.assert_indirect_indexing = False
 
         if is_speculative:
             global model_forward, logits_to_prob
