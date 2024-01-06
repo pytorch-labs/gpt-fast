@@ -50,6 +50,7 @@ class ModelArgs:
 
 
 transformer_configs = {
+    "TinyLlama-1.1B-intermediate-step-480k-1T": dict(block_size=2048, vocab_size=32000, intermediate_size=5632, n_layer=22, n_head=32, n_local_heads=4, dim=2048),
     "CodeLlama-7b-Python-hf": dict(block_size=16384, vocab_size=32000, n_layer=32, dim = 4096, rope_base=1000000),
     "7B": dict(n_layer=32, n_head=32, dim=4096),
     "13B": dict(n_layer=40, n_head=40, dim=5120),
