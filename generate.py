@@ -13,6 +13,15 @@ import torch
 import torch._dynamo.config
 import torch._inductor.config
 
+def device_sync(device):
+    if "cuda" in device:
+        torch.cuda.synchronize()
+    elif "cpu" in device:
+        pass
+    else:
+        print(f"device={device} is not yet suppported")
+
+
 torch._inductor.config.coordinate_descent_tuning = True
 torch._inductor.config.triton.unique_kernel_names = True
 torch._inductor.config.fx_graph_cache = True # Experimental feature to reduce compilation times, will be on by default in future
@@ -65,11 +74,12 @@ def decode_n_tokens(model: Transformer, cur_token: torch.Tensor, input_pos: torc
             next_token, next_prob = decode_one_token(
                 model, cur_token, input_pos, **sampling_kwargs
             )
-        input_pos += 1
-        new_tokens.append(next_token.clone())
-        callback(new_tokens[-1])
-        new_probs.append(next_prob.clone())
-        cur_token = next_token.view(1, -1)
+            input_pos += 1
+            new_tokens.append(next_token.clone())
+            callback(new_tokens[-1])
+            new_probs.append(next_prob.clone())
+            cur_token = next_token.view(1, -1)
+
     return new_tokens, new_probs
 
 
@@ -248,6 +258,7 @@ def main(
     profile: Optional[Path] = None,
     draft_checkpoint_path: Optional[Path] = None,
     speculate_k: int = 5,
+    device='cuda',
 ) -> None:
     """Generates text samples based on a pre-trained Transformer model and tokenizer.
     """
@@ -264,7 +275,7 @@ def main(
             # only print on rank 0
             print = lambda *args, **kwargs: None
 
-    device = 'cuda'
+    print(f"Using device={device}")
     precision = torch.bfloat16
     is_speculative = draft_checkpoint_path is not None
     is_chat = "chat" in str(checkpoint_path)
@@ -278,7 +289,7 @@ def main(
     else:
         draft_model = None
 
-    torch.cuda.synchronize()
+    device_sync(device=device) # MKG
     print(f"Time to load model: {time.time() - t0:.02f} seconds")
 
     tokenizer = SentencePieceProcessor(model_file=str(tokenizer_path))
@@ -288,7 +299,7 @@ def main(
     torch.manual_seed(1234)
     model_size = sum([p.numel() * p.dtype.itemsize for p in itertools.chain(model.parameters(), model.buffers())])
     if compile:
-        if is_speculative and use_tp:
+        if is_speculative and use_tp: # and ("cuda" in device):
             torch._inductor.config.triton.cudagraph_trees = False # Bug with cudagraph trees in this case
 
         if is_speculative:
@@ -310,7 +321,7 @@ def main(
     start = -1 if compile else 0
 
     for i in range(start, num_samples):
-        torch.cuda.synchronize()
+        device_sync(device=device) # MKG
         if i >= 0 and interactive:
             prompt = input("What is your prompt? ")
             if is_chat:
@@ -362,7 +373,7 @@ def main(
                 prof.export_chrome_trace(f"{profile}_rank_{rank}.json")
             else:
                 prof.export_chrome_trace(f"{profile}.json")
-        torch.cuda.synchronize()
+        device_sync(device=device) # MKG
         t = time.perf_counter() - t0
 
         if not interactive:
@@ -401,9 +412,11 @@ if __name__ == '__main__':
     parser.add_argument('--profile', type=Path, default=None, help='Profile path.')
     parser.add_argument('--speculate_k', type=int, default=5, help='Speculative execution depth.')
     parser.add_argument('--draft_checkpoint_path', type=Path, default=None, help='Draft checkpoint path.')
+    parser.add_argument('--device', type=str, default="cuda", help='device to use')
 
     args = parser.parse_args()
     main(
         args.prompt, args.interactive, args.num_samples, args.max_new_tokens, args.top_k,
-        args.temperature, args.checkpoint_path, args.compile, args.compile_prefill, args.profile, args.draft_checkpoint_path, args.speculate_k
+        args.temperature, args.checkpoint_path, args.compile, args.compile_prefill, args.profile, args.draft_checkpoint_path,
+        args.speculate_k, args.device
     )
