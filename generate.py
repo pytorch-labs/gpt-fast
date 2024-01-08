@@ -393,7 +393,7 @@ if __name__ == '__main__':
     import argparse
     parser = argparse.ArgumentParser(description='Your CLI description.')
 
-    parser.add_argument('--texts', type=list, default="[]", help='Input prompt.')
+    parser.add_argument('--texts', type=list, default=["Hello, my name is", "I like math"], help='Input prompts.')
     parser.add_argument('--prompt', type=str, default="Hello, my name is", help='Input prompt.')
     parser.add_argument('--interactive', action='store_true', help='Whether to launch in interactive mode')
     parser.add_argument('--num_samples', type=int, default=5, help='Number of samples.')
