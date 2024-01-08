@@ -236,6 +236,7 @@ def _load_model(checkpoint_path, device, precision, use_tp):
 B_INST, E_INST = "[INST]", "[/INST]"
 
 def main(
+    texts: list = [],
     prompt: str = "Hello, my name is",
     interactive: bool = False,
     num_samples: int = 5,
@@ -282,8 +283,6 @@ def main(
     print(f"Time to load model: {time.time() - t0:.02f} seconds")
 
     tokenizer = SentencePieceProcessor(model_file=str(tokenizer_path))
-    encoded = encode_tokens(tokenizer, prompt, bos=True, device=device)
-    prompt_length = encoded.size(0)
 
     torch.manual_seed(1234)
     model_size = sum([p.numel() * p.dtype.itemsize for p in itertools.chain(model.parameters(), model.buffers())])
@@ -309,86 +308,92 @@ def main(
     }
     start = -1 if compile else 0
 
-    for i in range(start, num_samples):
-        torch.cuda.synchronize()
-        if i >= 0 and interactive:
-            prompt = input("What is your prompt? ")
-            if is_chat:
-                prompt = f"{B_INST} {prompt.strip()} {E_INST}"
-            encoded = encode_tokens(tokenizer, prompt, bos=True, device=device)
+    for prompt in texts:
+        encoded = encode_tokens(tokenizer, prompt, bos=True, device=device)
+        prompt_length = encoded.size(0)
 
-        if interactive and i >= 0:
-            buffer = []
-            period_id = tokenizer.encode('.')[0]
-            done_generating = False
-            def callback(x):
-                nonlocal done_generating
-                if done_generating:
-                    return
-                buffer.append(tokenizer.decode([period_id] + x.tolist())[1:])
-                if x.item() == tokenizer.eos_id():
-                    done_generating = True
-                if len(buffer) == 4 or done_generating:
-                    print(''.join(buffer), end='', flush=True)
-                    buffer.clear()
-                # print(, end='', flush=True)
-        else:
-            callback = lambda x : x
-        t0 = time.perf_counter()
-        import contextlib
-        if (i != num_samples - 1 or not profile) or (use_tp and rank != 0):
-            prof = contextlib.nullcontext()
-        else:
-            torch.profiler._utils._init_for_cuda_graphs()
-            prof = torch.profiler.profile()
-        with prof:
-            y, metrics = generate(
-                model,
-                encoded,
-                max_new_tokens,
-                draft_model=draft_model,
-                speculate_k=speculate_k,
-                interactive=interactive,
-                callback=callback,
-                temperature=temperature,
-                top_k=top_k,
-            )
-            aggregate_metrics['accept_counts'].append(metrics['accept_counts'])
-        if i == -1:
-            print(f"Compilation time: {time.perf_counter() - t0:.2f} seconds")
-            continue
-        if hasattr(prof, "export_chrome_trace"):
-            if use_tp:
-                prof.export_chrome_trace(f"{profile}_rank_{rank}.json")
+
+        for i in range(start, num_samples):
+            torch.cuda.synchronize()
+            if i >= 0 and interactive:
+                prompt = input("What is your prompt? ")
+                if is_chat:
+                    prompt = f"{B_INST} {prompt.strip()} {E_INST}"
+                encoded = encode_tokens(tokenizer, prompt, bos=True, device=device)
+
+            if interactive and i >= 0:
+                buffer = []
+                period_id = tokenizer.encode('.')[0]
+                done_generating = False
+                def callback(x):
+                    nonlocal done_generating
+                    if done_generating:
+                        return
+                    buffer.append(tokenizer.decode([period_id] + x.tolist())[1:])
+                    if x.item() == tokenizer.eos_id():
+                        done_generating = True
+                    if len(buffer) == 4 or done_generating:
+                        print(''.join(buffer), end='', flush=True)
+                        buffer.clear()
+                    # print(, end='', flush=True)
             else:
-                prof.export_chrome_trace(f"{profile}.json")
-        torch.cuda.synchronize()
-        t = time.perf_counter() - t0
+                callback = lambda x : x
+            t0 = time.perf_counter()
+            import contextlib
+            if (i != num_samples - 1 or not profile) or (use_tp and rank != 0):
+                prof = contextlib.nullcontext()
+            else:
+                torch.profiler._utils._init_for_cuda_graphs()
+                prof = torch.profiler.profile()
+            with prof:
+                y, metrics = generate(
+                    model,
+                    encoded,
+                    max_new_tokens,
+                    draft_model=draft_model,
+                    speculate_k=speculate_k,
+                    interactive=interactive,
+                    callback=callback,
+                    temperature=temperature,
+                    top_k=top_k,
+                )
+                aggregate_metrics['accept_counts'].append(metrics['accept_counts'])
+            if i == -1:
+                print(f"Compilation time: {time.perf_counter() - t0:.2f} seconds")
+                continue
+            if hasattr(prof, "export_chrome_trace"):
+                if use_tp:
+                    prof.export_chrome_trace(f"{profile}_rank_{rank}.json")
+                else:
+                    prof.export_chrome_trace(f"{profile}.json")
+            torch.cuda.synchronize()
+            t = time.perf_counter() - t0
 
-        if not interactive:
-            print(tokenizer.decode(y.tolist()))
-        else:
-            print()
-        tokens_generated = y.size(0) - prompt_length
-        tokens_sec = tokens_generated / t
-        aggregate_metrics['tokens_per_sec'].append(tokens_sec)
-        print(f"Time for inference {i + 1}: {t:.02f} sec total, {tokens_sec:.02f} tokens/sec")
-        print(f"Bandwidth achieved: {model_size * tokens_sec / 1e9:.02f} GB/s")
-    print("==========")
-    if is_speculative:
-        counts_aggregated = [sum(i) for i in zip(*aggregate_metrics['accept_counts'])]
-        acceptance_probs = [i/sum(counts_aggregated) for i in counts_aggregated]
-        print(f"Acceptance probs: {acceptance_probs}")
-        print(f"Mean Accepted: {sum([idx * i for idx, i in enumerate(counts_aggregated)])/sum(counts_aggregated)}")
+            if not interactive:
+                print(tokenizer.decode(y.tolist()))
+            else:
+                print()
+            tokens_generated = y.size(0) - prompt_length
+            tokens_sec = tokens_generated / t
+            aggregate_metrics['tokens_per_sec'].append(tokens_sec)
+            print(f"Time for inference {i + 1}: {t:.02f} sec total, {tokens_sec:.02f} tokens/sec")
+            print(f"Bandwidth achieved: {model_size * tokens_sec / 1e9:.02f} GB/s")
+        print("==========")
+        if is_speculative:
+            counts_aggregated = [sum(i) for i in zip(*aggregate_metrics['accept_counts'])]
+            acceptance_probs = [i/sum(counts_aggregated) for i in counts_aggregated]
+            print(f"Acceptance probs: {acceptance_probs}")
+            print(f"Mean Accepted: {sum([idx * i for idx, i in enumerate(counts_aggregated)])/sum(counts_aggregated)}")
 
-    print(f"Average tokens/sec: {torch.mean(torch.tensor(aggregate_metrics['tokens_per_sec'])).item():.2f}")
-    print(f"Memory used: {torch.cuda.max_memory_reserved() / 1e9:.02f} GB")
+        print(f"Average tokens/sec: {torch.mean(torch.tensor(aggregate_metrics['tokens_per_sec'])).item():.2f}")
+        print(f"Memory used: {torch.cuda.max_memory_reserved() / 1e9:.02f} GB")
 
 
 if __name__ == '__main__':
     import argparse
     parser = argparse.ArgumentParser(description='Your CLI description.')
 
+    parser.add_argument('--texts', type=list, default="[]", help='Input prompt.')
     parser.add_argument('--prompt', type=str, default="Hello, my name is", help='Input prompt.')
     parser.add_argument('--interactive', action='store_true', help='Whether to launch in interactive mode')
     parser.add_argument('--num_samples', type=int, default=5, help='Number of samples.')
@@ -404,6 +409,6 @@ if __name__ == '__main__':
 
     args = parser.parse_args()
     main(
-        args.prompt, args.interactive, args.num_samples, args.max_new_tokens, args.top_k,
+        args.texts, args.prompt, args.interactive, args.num_samples, args.max_new_tokens, args.top_k,
         args.temperature, args.checkpoint_path, args.compile, args.compile_prefill, args.profile, args.draft_checkpoint_path, args.speculate_k
     )
