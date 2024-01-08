@@ -13,6 +13,9 @@ import torch
 import torch._dynamo.config
 import torch._inductor.config
 
+import scripts.settings as settings
+from scripts.parse_prompts import parse_prompts_from_HFdatasets
+
 torch._inductor.config.coordinate_descent_tuning = True
 torch._inductor.config.triton.unique_kernel_names = True
 torch._inductor.config.fx_graph_cache = True # Experimental feature to reduce compilation times, will be on by default in future
@@ -249,6 +252,7 @@ def main(
     profile: Optional[Path] = None,
     draft_checkpoint_path: Optional[Path] = None,
     speculate_k: int = 5,
+    prompt_file: bool = False,
 ) -> None:
     """Generates text samples based on a pre-trained Transformer model and tokenizer.
     """
@@ -308,6 +312,10 @@ def main(
     }
     start = -1 if compile else 0
 
+    if prompt_file is True:
+        settings.init_texts()
+        parse_prompts_from_HFdatasets()
+        texts = settings.texts
     for prompt in texts:
         encoded = encode_tokens(tokenizer, prompt, bos=True, device=device)
         prompt_length = encoded.size(0)
@@ -406,9 +414,11 @@ if __name__ == '__main__':
     parser.add_argument('--profile', type=Path, default=None, help='Profile path.')
     parser.add_argument('--speculate_k', type=int, default=5, help='Speculative execution depth.')
     parser.add_argument('--draft_checkpoint_path', type=Path, default=None, help='Draft checkpoint path.')
+    parser.add_argument('--prompt_file', type=bool, default=False, help='Prompt file; the file that contains the text for prompt. If not, use text for testing purposes')
 
     args = parser.parse_args()
     main(
         args.texts, args.prompt, args.interactive, args.num_samples, args.max_new_tokens, args.top_k,
-        args.temperature, args.checkpoint_path, args.compile, args.compile_prefill, args.profile, args.draft_checkpoint_path, args.speculate_k
+        args.temperature, args.checkpoint_path, args.compile, args.compile_prefill, args.profile, args.draft_checkpoint_path, args.speculate_k, 
+        args.prompt_file
     )
