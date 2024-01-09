@@ -111,6 +111,9 @@ def speculative_decode(
 
     if rejected_locations.shape[0] == 0: # All draft tokens have been accepted
         accept_length = speculate_k + 1
+        # add counter n into list counter_n_list: accepted tokens per call to target model
+        settings.counter_n_list.append(speculate_k)
+        
         last_token = multinomial_sample_one_no_sync(target_probs[-1])
         # fill last token into draft model
         model_forward(
@@ -121,6 +124,9 @@ def speculative_decode(
         return torch.cat([draft_tokens, last_token])
     else:
         accept_length = rejected_locations[0].item()
+        # add counter n into list counter_n_list: accepted tokens per call to target model
+        settings.counter_n_list.append(accept_length)
+        
         p = draft_probs[accept_length]
         q = target_probs[accept_length]
         new = q - p
@@ -316,7 +322,7 @@ def main(
         settings.init_texts()
         parse_prompts_from_HFdatasets()
         texts = settings.texts
-    for prompt in texts:
+    for prompt in texts[0:2]:
         encoded = encode_tokens(tokenizer, prompt, bos=True, device=device)
         prompt_length = encoded.size(0)
 
@@ -353,6 +359,11 @@ def main(
             else:
                 torch.profiler._utils._init_for_cuda_graphs()
                 prof = torch.profiler.profile()
+            
+            # initialize counter_n_list
+            settings.init_counter()
+            settings.init_counter_n_list()
+
             with prof:
                 y, metrics = generate(
                     model,
@@ -366,6 +377,8 @@ def main(
                     top_k=top_k,
                 )
                 aggregate_metrics['accept_counts'].append(metrics['accept_counts'])
+                # prints
+                print("metrics['accept_counts'] is ", metrics['accept_counts'])
             if i == -1:
                 print(f"Compilation time: {time.perf_counter() - t0:.2f} seconds")
                 continue
@@ -386,12 +399,15 @@ def main(
             aggregate_metrics['tokens_per_sec'].append(tokens_sec)
             print(f"Time for inference {i + 1}: {t:.02f} sec total, {tokens_sec:.02f} tokens/sec")
             print(f"Bandwidth achieved: {model_size * tokens_sec / 1e9:.02f} GB/s")
+            print("counter_n_list is ", settings.counter_n_list)
+
         print("==========")
         if is_speculative:
             counts_aggregated = [sum(i) for i in zip(*aggregate_metrics['accept_counts'])]
             acceptance_probs = [i/sum(counts_aggregated) for i in counts_aggregated]
             print(f"Acceptance probs: {acceptance_probs}")
             print(f"Mean Accepted: {sum([idx * i for idx, i in enumerate(counts_aggregated)])/sum(counts_aggregated)}")
+            print("aggregate_metrics['accept_counts'] is ", aggregate_metrics['accept_counts'])
 
         print(f"Average tokens/sec: {torch.mean(torch.tensor(aggregate_metrics['tokens_per_sec'])).item():.2f}")
         print(f"Memory used: {torch.cuda.max_memory_reserved() / 1e9:.02f} GB")
