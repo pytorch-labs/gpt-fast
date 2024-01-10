@@ -325,6 +325,10 @@ def main(
     else: # enforce texts is a list
         texts = [prompt]
 
+    # Create dataframe to collect results
+    df = pd.DataFrame(columns=['prompt_index', 'sample_index', 'K', 'counter_n_list', 
+        'inference_time', 'tokens_per_sec',  'bandwidth'])
+
     for idx, prompt in enumerate(texts[0:3]):
         encoded = encode_tokens(tokenizer, prompt, bos=True, device=device)
         prompt_length = encoded.size(0)
@@ -407,6 +411,18 @@ def main(
             print(f"Bandwidth achieved: {model_size * tokens_sec / 1e9:.02f} GB/s")
             print("counter_n_list is ", settings.counter_n_list)
 
+            # Update dataframe
+            bandwidth = model_size * tokens_sec / 1e9
+            insert_row = {'prompt_index': idx, 
+                    'sample_index': i,
+                    'K': speculate_k, 
+                    'counter_n_list': settings.counter_n_list,
+                    'inference_time': t, 
+                    'tokens_per_sec': tokens_sec,  
+                    'bandwidth': bandwidth }
+            df = pd.concat([df, pd.DataFrame([insert_row])])
+
+
         print("==========")
         if is_speculative:
             counts_aggregated = [sum(i) for i in zip(*aggregate_metrics['accept_counts'])]
@@ -418,6 +434,8 @@ def main(
         print(f"Average tokens/sec: {torch.mean(torch.tensor(aggregate_metrics['tokens_per_sec'])).item():.2f}")
         print(f"Memory used: {torch.cuda.max_memory_reserved() / 1e9:.02f} GB")
 
+        #Save dataframe
+        df.to_csv('dataframe_results.csv', index=False)
 
 if __name__ == '__main__':
     import argparse
