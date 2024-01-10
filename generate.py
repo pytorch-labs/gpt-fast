@@ -13,6 +13,8 @@ import torch
 import torch._dynamo.config
 import torch._inductor.config
 
+import pandas as pd
+
 import scripts.settings as settings
 from scripts.parse_prompts import parse_prompts_from_HFdatasets
 
