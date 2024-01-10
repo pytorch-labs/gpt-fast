@@ -322,7 +322,9 @@ def main(
         settings.init_texts()
         parse_prompts_from_HFdatasets()
         texts = settings.texts
-    # TODO: add the situation where only prompt is available
+    else: # enforce texts is a list
+        texts = [prompt]
+
     for idx, prompt in enumerate(texts[0:3]):
         encoded = encode_tokens(tokenizer, prompt, bos=True, device=device)
         prompt_length = encoded.size(0)
