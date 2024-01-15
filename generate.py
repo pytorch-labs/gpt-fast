@@ -229,7 +229,7 @@ def _load_model(checkpoint_path, device, precision, use_tp):
         assert path_comps[-2].startswith("g")
         groupsize = int(path_comps[-2][1:])
         from quantize import WeightOnlyInt4QuantHandler
-        simple_quantizer = WeightOnlyInt4QuantHandler(model, groupsize)
+        simple_quantizer = WeightOnlyInt4QuantHandler(model, groupsize, device=device)
         model = simple_quantizer.convert_for_runtime()
 
     checkpoint = torch.load(str(checkpoint_path), mmap=True, weights_only=True)

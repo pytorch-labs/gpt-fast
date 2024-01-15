@@ -364,29 +364,30 @@ def linear_forward_int4(x, weight_int4pack, scales_and_zeros, out_features, grou
 def _check_linear_int4_k(k, groupsize = 1, inner_k_tiles = 1):
     return k % groupsize == 0 and k % (inner_k_tiles * 16) == 0
 
-def replace_linear_int4(module, groupsize, inner_k_tiles, padding):
+def replace_linear_int4(module, groupsize, inner_k_tiles, padding, device):
     for name, child in module.named_children():
         if isinstance(child, nn.Linear):
             if _check_linear_int4_k(child.in_features, groupsize, inner_k_tiles):
                 setattr(module, name, WeightOnlyInt4Linear(
                     child.in_features, child.out_features, bias=False,
-                    groupsize=groupsize, inner_k_tiles=inner_k_tiles, padding=False,
+                    groupsize=groupsize, inner_k_tiles=inner_k_tiles, padding=False, device=device
                 ))
             elif padding:
                 setattr(module, name, WeightOnlyInt4Linear(
                     child.in_features, child.out_features, bias=False,
-                    groupsize=groupsize, inner_k_tiles=inner_k_tiles, padding=True,
+                    groupsize=groupsize, inner_k_tiles=inner_k_tiles, padding=True, device=device
                 ))
         else:
-            replace_linear_int4(child, groupsize, inner_k_tiles, padding)
+            replace_linear_int4(child, groupsize, inner_k_tiles, padding, device)
 
 
 class WeightOnlyInt4QuantHandler:
-    def __init__(self, mod, groupsize=128, inner_k_tiles=8, padding=True):
+    def __init__(self, mod, groupsize=128, inner_k_tiles=8, padding=True, device='cuda'):
         self.mod = mod
         self.groupsize = groupsize
         self.inner_k_tiles = inner_k_tiles
         self.padding = padding
+        self.device = device
         assert groupsize in [32, 64, 128, 256]
         assert inner_k_tiles in [2, 4, 8]
 
@@ -414,7 +415,7 @@ class WeightOnlyInt4QuantHandler:
                             "and that groupsize and inner_k_tiles*16 evenly divide into it")
                         continue
                 weight_int4pack, scales_and_zeros = prepare_int4_weight_and_scales_and_zeros(
-                    weight.to(torch.bfloat16).to('cuda'), self.groupsize, self.inner_k_tiles
+                    weight.to(torch.bfloat16).to(device=self.device), self.groupsize, self.inner_k_tiles
                 )
                 cur_state_dict[f"{fqn}.weight"] = weight_int4pack.to('cpu')
                 cur_state_dict[f"{fqn}.scales_and_zeros"] = scales_and_zeros.to('cpu')
@@ -422,7 +423,7 @@ class WeightOnlyInt4QuantHandler:
         return cur_state_dict
 
     def convert_for_runtime(self):
-        replace_linear_int4(self.mod, self.groupsize, self.inner_k_tiles, self.padding)
+        replace_linear_int4(self.mod, self.groupsize, self.inner_k_tiles, self.padding, self.device)
         return self.mod
 
 class WeightOnlyInt4GPTQQuantHandler(GPTQQuantHandler):
@@ -488,10 +489,18 @@ class WeightOnlyInt4Linear(torch.nn.Module):
 
         assert out_features % 8 == 0, "require out_features % 8 == 0"
         assert in_features % (inner_k_tiles * 16) == 0, "require in_features % (innerKTiles * 16) == 0"
-        self.register_buffer(
-            "weight",
-            torch.empty((out_features // 8, in_features // (inner_k_tiles * 16), 32, inner_k_tiles // 2), dtype=torch.int32)
-        )
+        if device == 'cuda':
+            self.register_buffer(
+                "weight",
+                torch.empty((out_features // 8, in_features // (inner_k_tiles * 16), 32, inner_k_tiles // 2), dtype=torch.int32)
+            )
+        elif device == 'cpu':
+            self.register_buffer(
+                "weight",
+                torch.empty((out_features, in_features // 2), dtype=torch.uint8)
+            )
+        else:
+            raise ValueError(f"Invalid  device {device} needs to be one of [cuda, cpu]")
         self.register_buffer(
             "scales_and_zeros",
             torch.empty((in_features // groupsize, out_features, 2), dtype=torch.bfloat16)
@@ -521,13 +530,14 @@ def quantize(
     percdamp: float = .01,
     blocksize: int = 128,
     label: str = '',
+    device: str = 'cuda',
 ) -> None:
     assert checkpoint_path.is_file(), checkpoint_path
 
-    device = 'cpu'
     precision = torch.bfloat16
 
     print("Loading model ...")
+    print(f"Target device={device}")
     t0 = time.time()
 
     with torch.device('meta'):
@@ -535,7 +545,7 @@ def quantize(
 
     checkpoint = torch.load(str(checkpoint_path), mmap=True, weights_only=True)
     model.load_state_dict(checkpoint, assign=True)
-    model = model.to(dtype=precision, device=device)
+    model = model.to(dtype=precision, device='cpu')
 
     if mode == 'int8':
         print("Quantizing model weights for int8 weight-only symmetric per-channel quantization")
@@ -548,7 +558,7 @@ def quantize(
 
     elif mode == 'int4':
         print("Quantizing model weights for int4 weight-only affine per-channel groupwise quantization")
-        quant_handler = WeightOnlyInt4QuantHandler(model, groupsize)
+        quant_handler = WeightOnlyInt4QuantHandler(model, groupsize, device=device)
         quantized_state_dict = quant_handler.create_quantized_state_dict()
 
         dir_name = checkpoint_path.parent
@@ -600,6 +610,7 @@ if __name__ == '__main__':
     parser.add_argument('--percdamp', type=float, default=.01, help='gptq percentage dampening')
     parser.add_argument('--blocksize', type=int, default=128, help='blocksize for gptq')
     parser.add_argument('--label', type=str, default='_', help='label to add to output filename')
+    parser.add_argument('--device', type=str, default="cuda", help='device to use')
 
     args = parser.parse_args()
-    quantize(args.checkpoint_path, args.mode, args.groupsize, args.calibration_tasks, args.calibration_limit, args.calibration_seq_length, args.pad_calibration_inputs, args.percdamp, args.blocksize, args.label)
+    quantize(args.checkpoint_path, args.mode, args.groupsize, args.calibration_tasks, args.calibration_limit, args.calibration_seq_length, args.pad_calibration_inputs, args.percdamp, args.blocksize, args.label, args.device)
