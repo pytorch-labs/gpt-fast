@@ -318,7 +318,6 @@ def main(
                 prompt = f"{B_INST} {prompt.strip()} {E_INST}"
             encoded = encode_tokens(tokenizer, prompt, bos=True, device=device)
 
-        if interactive and i >= 0:
             buffer = []
             period_id = tokenizer.encode('.')[0]
             done_generating = False
