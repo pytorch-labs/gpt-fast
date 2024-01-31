@@ -28,7 +28,7 @@ import sys
 
 from sentencepiece import SentencePieceProcessor
 
-from model import LLaMA
+from model import Transformer
 
 lm_evaluation_harness_path = '/'.join(
     os.getcwd().split('/')[:-1] + ['lm-evaluation-harness'])
@@ -40,7 +40,7 @@ from generate import _load_model, encode_tokens, model_forward
 
 
 def setup_cache_padded_seq_input_pos_max_seq_length_for_prefill(
-    model: LLaMA,
+    model: Transformer,
     prompt: torch.Tensor,
     max_new_tokens: int,
     max_seq_length: Optional[int] = None,
@@ -77,13 +77,13 @@ def setup_cache_padded_seq_input_pos_max_seq_length_for_prefill(
 
     return seq, input_pos, max_seq_length
 
-class SimpleGPTEvalWrapper(lm_eval.base.BaseLM):
+class GPTFastEvalWrapper(lm_eval.base.BaseLM):
     """
-    A wrapper class for SimpleGPT, providing integration with the lm-evaluation-harness library.
+    A wrapper class for GPTFast, providing integration with the lm-evaluation-harness library.
     """
     def __init__(
         self,
-        model: LLaMA,
+        model: Transformer,
         tokenizer,
         max_seq_length: Optional[int]=None,
     ):
@@ -115,7 +115,7 @@ class SimpleGPTEvalWrapper(lm_eval.base.BaseLM):
 
     def tok_encode(self, string: str):
         encoded = encode_tokens(self._tokenizer,
-            string, bos=True, eos=False, device=self._device)
+            string, bos=True, device=self._device)
         # encoded is a pytorch tensor, but some internal logic in the
         # eval harness expects it to be a list instead
         # TODO: verify this for multi-batch as well
@@ -148,7 +148,7 @@ class SimpleGPTEvalWrapper(lm_eval.base.BaseLM):
 
 @torch.no_grad()
 def eval(
-    model: LLaMA,
+    model: Transformer,
     tokenizer,
     tasks: list = ["hellaswag"],
     limit: Optional[int] = None,
@@ -158,7 +158,7 @@ def eval(
     Evaluates a language model on a specified task using the lm-evaluation-harness library.
 
     Args:
-        model (LLaMA): The pre-trained language model to evaluate.
+        model (Transformer): The pre-trained language model to evaluate.
         tokenizer: The tokenizer to use for encoding/decoding text.
         task (str): The name of the evaluation task to perform.
         limit (Optional[int]): The maximum number of samples to evaluate (None for all available).
@@ -167,7 +167,7 @@ def eval(
     Returns:
         eval_results (dict): A dictionary of evaluation results for the specified task(s).
     """
-    model_eval_wrapper = SimpleGPTEvalWrapper(
+    model_eval_wrapper = GPTFastEvalWrapper(
         model,
         tokenizer,
         max_seq_length,
