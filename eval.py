@@ -24,12 +24,13 @@ from model import Transformer
 
 try:
     import lm_eval
+    lm_eval_available = True
 except:
-    lm_eval = False
+    lm_eval_available = False
 
 from generate import _load_model, encode_tokens, model_forward
 
-if lm_eval:
+if lm_eval_available:
     try: # lm_eval version 0.4
         from lm_eval.models.huggingface import HFLM as eval_wrapper
         from lm_eval.tasks import get_task_dict
