@@ -391,7 +391,12 @@ class WeightOnlyInt4QuantHandler:
         assert inner_k_tiles in [2, 4, 8]
 
     @torch.no_grad()
-    def create_quantized_state_dict(self):
+    def create_quantized_state_dict(self, use_cuda = True):
+        if use_cuda:
+            device="cuda"
+        else:
+            device="cpu"
+
         cur_state_dict = self.mod.state_dict()
         for fqn, mod in self.mod.named_modules():
             if isinstance(mod, torch.nn.Linear):
@@ -414,7 +419,7 @@ class WeightOnlyInt4QuantHandler:
                             "and that groupsize and inner_k_tiles*16 evenly divide into it")
                         continue
                 weight_int4pack, scales_and_zeros = prepare_int4_weight_and_scales_and_zeros(
-                    weight.to(torch.bfloat16).to('cuda'), self.groupsize, self.inner_k_tiles
+                    weight.to(torch.bfloat16).to(device=device), self.groupsize, self.inner_k_tiles
                 )
                 cur_state_dict[f"{fqn}.weight"] = weight_int4pack.to('cpu')
                 cur_state_dict[f"{fqn}.scales_and_zeros"] = scales_and_zeros.to('cpu')
