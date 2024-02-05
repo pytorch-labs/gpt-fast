@@ -34,7 +34,6 @@ sys.path.append(str(wd))
 from sentencepiece import SentencePieceProcessor
 
 from model import Transformer
-from tp import maybe_init_dist
 
 
 def multinomial_sample_one_no_sync(probs_sort): # Does multinomial sampling without a cuda synchronization
@@ -268,6 +267,7 @@ def main(
     assert tokenizer_path.is_file(), tokenizer_path
 
     global print
+    from tp import maybe_init_dist
     rank = maybe_init_dist()
     use_tp = rank is not None
     if use_tp:
