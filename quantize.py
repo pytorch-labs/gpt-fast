@@ -12,7 +12,8 @@ import torch.nn.functional as F
 from sentencepiece import SentencePieceProcessor
 
 try:
-    from GPTQ import GenericGPTQRunner, InputRecorder, lm_eval
+    from GPTQ import GenericGPTQRunner, InputRecorder
+    from eval import get_task_dict, evaluate
 except:
     pass
 
@@ -248,9 +249,9 @@ class GPTQQuantHandler(QuantHandler):
             calibration_seq_length,
             pad_calibration_inputs,
         )
-        task_dict = lm_eval.tasks.get_task_dict(calibration_tasks)
+        task_dict = get_task_dict(calibration_tasks)
         print("Obtaining GPTQ calibration inputs on: ", calibration_tasks)
-        lm_eval.evaluator.evaluate(
+        evaluate(
             input_recorder,
             task_dict,
             limit=calibration_limit,

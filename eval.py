@@ -18,25 +18,31 @@ torch._inductor.config.epilogue_fusion = False
 torch._inductor.config.triton.cudagraphs = True
 torch._dynamo.config.cache_size_limit = 100000
 
-# support running without installing as a package
-wd = Path(__file__).parent.parent.resolve()
-sys.path.append(str(wd))
-
-# hacky path setup for lm-evaluation-harness
-import os
-import sys
-
 from sentencepiece import SentencePieceProcessor
 
 from model import Transformer
 
-lm_evaluation_harness_path = '/'.join(
-    os.getcwd().split('/')[:-1] + ['lm-evaluation-harness'])
-sys.path.insert(0, lm_evaluation_harness_path)
-import lm_eval
-import main as lm_evaluation_harness_main
+try:
+    import lm_eval
+    lm_eval_available = True
+except:
+    lm_eval_available = False
 
 from generate import _load_model, encode_tokens, model_forward
+
+if lm_eval_available:
+    try: # lm_eval version 0.4
+        from lm_eval.models.huggingface import HFLM as eval_wrapper
+        from lm_eval.tasks import get_task_dict
+        from lm_eval.evaluator import evaluate
+        lm_eval.tasks.initialize_tasks()
+    except: #lm_eval version 0.3
+        from lm_eval import base
+        from lm_eval import tasks
+        from lm_eval import evaluator
+        eval_wrapper=base.BaseLM
+        get_task_dict=tasks.get_task_dict
+        evaluate=evaluator.evaluate
 
 
 def setup_cache_padded_seq_input_pos_max_seq_length_for_prefill(
@@ -77,7 +83,7 @@ def setup_cache_padded_seq_input_pos_max_seq_length_for_prefill(
 
     return seq, input_pos, max_seq_length
 
-class GPTFastEvalWrapper(lm_eval.base.BaseLM):
+class GPTFastEvalWrapper(eval_wrapper):
     """
     A wrapper class for GPTFast, providing integration with the lm-evaluation-harness library.
     """
@@ -113,7 +119,7 @@ class GPTFastEvalWrapper(lm_eval.base.BaseLM):
     def device(self):
         return self._device
 
-    def tok_encode(self, string: str):
+    def tok_encode(self, string: str, **kwargs):
         encoded = encode_tokens(self._tokenizer,
             string, bos=True, device=self._device)
         # encoded is a pytorch tensor, but some internal logic in the
@@ -176,9 +182,9 @@ def eval(
     if 'hendrycks_test' in tasks:
         tasks.remove('hendrycks_test')
         tasks += [x for x in lm_eval.tasks.hendrycks_test.create_all_tasks().keys()]
-    task_dict = lm_eval.tasks.get_task_dict(tasks)
+    task_dict = get_task_dict(tasks)
 
-    eval_results = lm_eval.evaluator.evaluate(
+    eval_results = evaluate(
         model_eval_wrapper,
         task_dict,
         limit=limit,
