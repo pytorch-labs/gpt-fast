@@ -4,15 +4,18 @@
 # This source code is licensed under the license found in the
 # LICENSE file in the root directory of this source tree.
 from dataclasses import dataclass
-from typing import Optional
+from typing import Optional, Tuple
 
 import torch
 import torch.nn as nn
 from torch import Tensor
 from torch.nn import functional as F
+from math import gcd
+from functools import reduce
 
 
-def find_multiple(n: int, k: int) -> int:
+def find_multiple(n: int, *args: Tuple[int]) -> int:
+    k = reduce(lambda x,y: x*y//gcd(x,y), args+(1,))
     if n % k == 0:
         return n
     return n + k - (n % k)
