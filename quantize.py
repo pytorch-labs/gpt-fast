@@ -17,7 +17,7 @@ try:
 except:
     pass
 
-from model import Transformer
+from model import Transformer, find_multiple
 
 ##### Quantization Primitives ######
 
@@ -365,29 +365,27 @@ def linear_forward_int4(x, weight_int4pack, scales_and_zeros, out_features, grou
 def _check_linear_int4_k(k, groupsize = 1, inner_k_tiles = 1):
     return k % groupsize == 0 and k % (inner_k_tiles * 16) == 0
 
-def replace_linear_int4(module, groupsize, inner_k_tiles, padding):
+def _calc_padded_size_linear_int4(k, groupsize = 1, inner_k_tiles = 1):
+    return find_multiple(k, groupsize, inner_k_tiles*16)
+
+def replace_linear_int4(module, groupsize, inner_k_tiles, padding_allowed):
     for name, child in module.named_children():
         if isinstance(child, nn.Linear):
-            if _check_linear_int4_k(child.in_features, groupsize, inner_k_tiles):
+            if _check_linear_int4_k(child.in_features, groupsize, inner_k_tiles) or padding_allowed:
                 setattr(module, name, WeightOnlyInt4Linear(
                     child.in_features, child.out_features, bias=False,
-                    groupsize=groupsize, inner_k_tiles=inner_k_tiles, padding=False,
-                ))
-            elif padding:
-                setattr(module, name, WeightOnlyInt4Linear(
-                    child.in_features, child.out_features, bias=False,
-                    groupsize=groupsize, inner_k_tiles=inner_k_tiles, padding=True,
+                    groupsize=groupsize, inner_k_tiles=inner_k_tiles,
                 ))
         else:
-            replace_linear_int4(child, groupsize, inner_k_tiles, padding)
+            replace_linear_int4(child, groupsize, inner_k_tiles, padding_allowed)
 
 
 class WeightOnlyInt4QuantHandler:
-    def __init__(self, mod, groupsize=128, inner_k_tiles=8, padding=True):
+    def __init__(self, mod, groupsize=128, inner_k_tiles=8, padding_allowed=True):
         self.mod = mod
         self.groupsize = groupsize
         self.inner_k_tiles = inner_k_tiles
-        self.padding = padding
+        self.padding_allowed = padding_allowed
         assert groupsize in [32, 64, 128, 256]
         assert inner_k_tiles in [2, 4, 8]
 
@@ -409,11 +407,9 @@ class WeightOnlyInt4QuantHandler:
 
                 weight = mod.weight.data
                 if not _check_linear_int4_k(in_features, self.groupsize, self.inner_k_tiles):
-                    if self.padding:
-                        from model import find_multiple
-                        import torch.nn.functional as F
+                    if self.padding_allowed:
                         print(f"warning: {fqn} is padded to satisfy in_features % 1024 == 0")
-                        padded_in_features = find_multiple(in_features, 1024)
+                        padded_in_features = _calc_padded_size_linear_int4(in_features, 1024)
                         weight = F.pad(weight, pad=(0, padded_in_features - in_features))
                     else:
                         print(f"warning: {fqn} is skipped, int4 requires that in_features is 32, 64, or is divisible by 1024, " +
@@ -428,16 +424,15 @@ class WeightOnlyInt4QuantHandler:
         return cur_state_dict
 
     def convert_for_runtime(self):
-        replace_linear_int4(self.mod, self.groupsize, self.inner_k_tiles, self.padding)
+        replace_linear_int4(self.mod, self.groupsize, self.inner_k_tiles, self.padding_allowed)
         return self.mod
 
 class WeightOnlyInt4GPTQQuantHandler(GPTQQuantHandler):
-    def __init__(self, mod, groupsize=128, inner_k_tiles=8, padding=True):
-        from model import find_multiple
+    def __init__(self, mod, groupsize=128, inner_k_tiles=8, padding_allowed=True):
         self.mod = mod
         self.groupsize = groupsize
         self.inner_k_tiles = inner_k_tiles
-        self.padding = padding
+        self.padding_allowed = padding_allowed
         self.get_qparams_func = lambda w: get_group_qparams(w, 4, groupsize)
         self.quantize_func = lambda w, qparams: \
             group_quantize_tensor_from_qparams(w, qparams[0], qparams[1], 4, groupsize)
@@ -445,14 +440,14 @@ class WeightOnlyInt4GPTQQuantHandler(GPTQQuantHandler):
             group_dequantize_tensor_from_qparams(q, qparams[0], qparams[1], 4, groupsize).float()
         self.combine_qparams_list_func = lambda qparams_list: \
             [torch.cat(x, dim=1) for x in zip(*qparams_list)]
-        # skip unless padding=True or its correctly sized
+        # skip unless padding_allowed=True or its correctly sized
         self.skip_layer_func = lambda linear_weight: not (
-            _check_linear_int4_k(linear_weight.shape[-1], groupsize, inner_k_tiles) or padding
+            _check_linear_int4_k(linear_weight.shape[-1], groupsize, inner_k_tiles) or padding_allowed
         )
         # we need to do the padding here, both for q and the qparams if necessary
         def make_names_and_values_dict_func(q, qparams):
             k = q.shape[1]
-            new_k = find_multiple(k, 1024)
+            new_k = _calc_padded_size_linear_int4(k, groupsize, inner_k_tiles)
             # how much we need to pad the weight
             delta_k = new_k - q.shape[1]
             final_q = torch.ops.aten._convert_weight_to_int4pack(F.pad(q, pad=(0, delta_k)), inner_k_tiles)
@@ -466,7 +461,7 @@ class WeightOnlyInt4GPTQQuantHandler(GPTQQuantHandler):
 
 
     def convert_for_runtime(self):
-        replace_linear_int4(self.mod, self.groupsize, self.inner_k_tiles, self.padding)
+        replace_linear_int4(self.mod, self.groupsize, self.inner_k_tiles, self.padding_allowed)
         return self.mod
 
 class WeightOnlyInt4Linear(torch.nn.Module):
@@ -477,17 +472,16 @@ class WeightOnlyInt4Linear(torch.nn.Module):
 
     def __init__(
             self, in_features: int, out_features: int,
-            bias=True, device=None, dtype=None, groupsize: int = 128, inner_k_tiles: int = 8, padding: bool = True,
+            bias=True, device=None, dtype=None, groupsize: int = 128, inner_k_tiles: int = 8,
     ) -> None:
         super().__init__()
-        self.padding = padding
-        if padding:
-            from model import find_multiple
-            self.origin_in_features = in_features
-            in_features = find_multiple(in_features, 1024)
 
+        # always pad if needed since it becomes a noop at runtime if not needed
+        self.origin_in_features = in_features
+        in_features = _calc_padded_size_linear_int4(in_features, groupsize, inner_k_tiles)
         self.in_features = in_features
         self.out_features = out_features
+
         assert not bias, "require bias=False"
         self.groupsize = groupsize
         self.inner_k_tiles = inner_k_tiles
@@ -505,9 +499,7 @@ class WeightOnlyInt4Linear(torch.nn.Module):
 
     def forward(self, input: torch.Tensor) -> torch.Tensor:
         input = input.to(torch.bfloat16)
-        if self.padding:
-            import torch.nn.functional as F
-            input = F.pad(input, pad=(0, self.in_features - self.origin_in_features))
+        input = F.pad(input, pad=(0, self.in_features - self.origin_in_features))
         return linear_forward_int4(
             input,
             self.weight, self.scales_and_zeros, self.out_features, self.groupsize
