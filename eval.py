@@ -35,7 +35,6 @@ if lm_eval_available:
         from lm_eval.models.huggingface import HFLM as eval_wrapper
         from lm_eval.tasks import get_task_dict
         from lm_eval.evaluator import evaluate
-        lm_eval.tasks.initialize_tasks()
     except: #lm_eval version 0.3
         from lm_eval import base
         from lm_eval import tasks
@@ -178,6 +177,11 @@ def eval(
         tokenizer,
         max_seq_length,
     )
+
+    try:
+        lm_eval.tasks.initialize_tasks()
+    except:
+        pass
 
     if 'hendrycks_test' in tasks:
         tasks.remove('hendrycks_test')
