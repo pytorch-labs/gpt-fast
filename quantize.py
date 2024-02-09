@@ -22,6 +22,7 @@ from et_quantize import (
     per_token_dynamic_quant,
     linear_forward_8da4w,
     get_group_qparams_symmetric,
+    pack_scales_and_zeros,
 )
 
 ##### Quantization Primitives ######
@@ -79,23 +80,6 @@ def get_group_qparams(w, n_bit=4, groupsize=128):
     return scales.to(torch.bfloat16).reshape(w.shape[0], -1), zeros.to(
         torch.bfloat16
     ).reshape(w.shape[0], -1)
-
-
-def pack_scales_and_zeros(scales, zeros, precision=torch.bfloat16):
-    assert scales.shape == zeros.shape
-    assert scales.dtype == precision
-    assert zeros.dtype == precision
-    return (
-        torch.cat(
-            [
-                scales.reshape(scales.size(0), scales.size(1), 1),
-                zeros.reshape(zeros.size(0), zeros.size(1), 1),
-            ],
-            2,
-        )
-        .transpose(0, 1)
-        .contiguous()
-    )
 
 
 def unpack_scales_and_zeros(scales_and_zeros):
@@ -521,9 +505,6 @@ class WeightOnlyInt4Linear(torch.nn.Module):
 
 ################################### LLM Quantization for ExecuTorch ######################
 
-def _check_linear_int4_k(k, groupsize = 1, inner_k_tiles = 1):
-    return k % groupsize == 0 and k % (inner_k_tiles * 16) == 0
-
 def replace_linear_8da4w(module, groupsize, inner_k_tiles, padding_allowed):
     for name, child in module.named_children():
         if isinstance(child, nn.Linear):
@@ -533,7 +514,7 @@ def replace_linear_8da4w(module, groupsize, inner_k_tiles, padding_allowed):
                     groupsize=groupsize, inner_k_tiles=inner_k_tiles,
                 ))
         else:
-            replace_linear_8da4w(child, groupsize, inner_k_tiles, padding)
+            replace_linear_8da4w(child, groupsize, inner_k_tiles, padding_allowed)
 
 class Int8DynActInt4WeightLinear(torch.nn.Module):
     __constants__ = ['in_features', 'out_features']
@@ -569,10 +550,7 @@ class Int8DynActInt4WeightLinear(torch.nn.Module):
 
     def forward(self, input: torch.Tensor) -> torch.Tensor:
         input = input.to(self.precision)
-        if self.padding:
-            import torch.nn.functional as F
-            input = F.pad(input, pad=(0, self.in_features - self.origin_in_features))
-
+        input = F.pad(input, pad=(0, self.in_features - self.origin_in_features))
         return linear_forward_8da4w(
             input,
             self.weight, self.scales_and_zeros, self.out_features, self.groupsize
@@ -580,12 +558,12 @@ class Int8DynActInt4WeightLinear(torch.nn.Module):
 
 
 class Int8DynActInt4WeightGPTQQuantHandler(GPTQQuantHandler):
-    def __init__(self, mod, groupsize=128, inner_k_tiles=8, padding=True):
+    def __init__(self, mod, groupsize=128, inner_k_tiles=8, padding_allowed=True):
         from model import find_multiple
         self.mod = mod
         self.groupsize = groupsize
         self.inner_k_tiles = inner_k_tiles
-        self.padding = padding
+        self.padding_allowed = padding_allowed
         self.precision = torch.float16
         self.dyn_quant_func = lambda x: per_token_dynamic_quant(x)
         self.get_qparams_func = lambda w: get_group_qparams_symmetric(w, 4, groupsize, self.precision)
@@ -595,17 +573,17 @@ class Int8DynActInt4WeightGPTQQuantHandler(GPTQQuantHandler):
         self.quantize_func = lambda w, qparams: \
             torch.ops.quantized_decomposed.quantize_per_channel_group(w, qparams[0], qparams[1], quant_min, quant_max, torch.int8, groupsize)
         self.dequantize_func = lambda q, qparams: \
-            torch.ops.quantized_decomposed.quantize_per_channel_group(q, qparams[0], qparams[1], quant_min, quant_max, torch.int8, groupsize).float()
+            torch.ops.quantized_decomposed.dequantize_per_channel_group(q, qparams[0], qparams[1], quant_min, quant_max, torch.int8, groupsize, out_dtype=self.precision)
         self.combine_qparams_list_func = lambda qparams_list: \
             [torch.cat(x, dim=1) for x in zip(*qparams_list)]
-        # skip unless padding=True or its correctly sized
+        # skip unless padding_allowed=True or its correctly sized
         self.skip_layer_func = lambda linear_weight: not (
-            _check_linear_int4_k(linear_weight.shape[-1], groupsize, inner_k_tiles) or padding
+            _check_linear_int4_k(linear_weight.shape[-1], groupsize, inner_k_tiles) or padding_allowed
         )
         # we need to do the padding here, both for q and the qparams if necessary
         def make_names_and_values_dict_func(q, qparams):
             k = q.shape[1]
-            new_k = find_multiple(k, 1024)
+            new_k = _calc_padded_size_linear_int4(k, groupsize, inner_k_tiles)
             # how much we need to pad the weight
             delta_k = new_k - q.shape[1]
             final_q = F.pad(q, pad=(0, delta_k))
@@ -619,7 +597,7 @@ class Int8DynActInt4WeightGPTQQuantHandler(GPTQQuantHandler):
 
 
     def convert_for_runtime(self):
-        replace_linear_8da4w(self.mod, self.groupsize, self.inner_k_tiles, self.padding)
+        replace_linear_8da4w(self.mod, self.groupsize, self.inner_k_tiles, self.padding_allowed)
         return self.mod
 
 ################################### END LLM Quantization for ExecuTorch ######################
@@ -642,7 +620,8 @@ def quantize(
     assert checkpoint_path.is_file(), checkpoint_path
 
     device = 'cpu'
-    precision = torch.bfloat16
+    # precision = torch.bfloat16
+    precision = torch.float16
 
     print("Loading model ...")
     t0 = time.time()

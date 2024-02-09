@@ -212,7 +212,7 @@ def get_group_qparams_symmetric(w, n_bit=4, groupsize=128, precision=torch.float
     )
 
 
-def pack_scales_and_zeros(scales, zeros, precision=torch.float16):
+def pack_scales_and_zeros(scales, zeros, precision=torch.bfloat16):
     assert scales.shape == zeros.shape
     assert scales.dtype == precision
     assert zeros.dtype == precision
@@ -331,13 +331,14 @@ def group_quantize_tensor_symmetric(w, n_bit=4, group_size=128):
         w, scales, zeros, min_int, max_int, torch.int8, group_size
     )
 
-    scales_and_zeros = pack_scales_and_zeros(scales, zeros)
+    # TODO: add precision arg
+    scales_and_zeros = pack_scales_and_zeros(scales, zeros, torch.float16)
     return w_int8, scales_and_zeros
 
 
 quantized_decomposed_lib.define(
     "dequantize_per_channel_group(Tensor input, Tensor scales, Tensor zero_points, int quant_min, "
-    "int quant_max, ScalarType dtype, int group_size) -> Tensor"
+    "int quant_max, ScalarType dtype, int group_size, ScalarType out_dtype) -> Tensor"
 )
 
 
@@ -353,7 +354,8 @@ def dequantize_per_channel_group(
     quant_min: int,
     quant_max: int,
     dtype: torch.dtype,
-    group_size=128,
+    group_size: int = 128,
+    out_dtype: torch.dtype = torch.float16,
 ):
     """Groupwise dequantization within each channel for an 2-d Tensor using the quantization parameters
     to map from floating point to quantized values. This means for each row of a 2-d Tensor
@@ -383,20 +385,20 @@ def dequantize_per_channel_group(
     w_int8_grouped = w_int8.reshape(-1, group_size)
     scales = scales.reshape(-1, 1)
     zero_points = zero_points.reshape(-1, 1)
-    w_dq = w_int8_grouped.sub(zero_points).mul(scales).reshape_as(w_int8)
+    w_dq = w_int8_grouped.sub(zero_points).mul(scales).reshape_as(w_int8).to(out_dtype)
     return w_dq
 
 
 def group_dequantize_tensor_symmetric(
-    w_int8, scales_and_zeros, n_bit=4, group_size=128
+    w_int8, scales_and_zeros, group_size=128
 ):
     # TODO: remove this
     scales, zero_points = unpack_scales_and_zeros(scales_and_zeros)
     n_bit = 4
     quant_min = -(2 ** (n_bit - 1))
     quant_max = 2 ** (n_bit - 1) - 1
-    return torch.ops.quantized_decomposed.quantize_per_channel_group(
-        w_int8, scales, zero_points, quant_min, quant_max, torch.uint4, group_size
+    return torch.ops.quantized_decomposed.dequantize_per_channel_group(
+        w_int8, scales, zero_points, quant_min, quant_max, torch.int8, group_size, torch.float16
     )
 
 
@@ -463,8 +465,7 @@ def linear_forward_8da4w(x, weight_int8, scales_and_zeros, out_features, groupsi
     origin_x_size = x.size()
     x = x.reshape(-1, origin_x_size[-1])
     scales_and_zeros = scales_and_zeros.to(torch.float)
-    scales, zeros = unpack_scales_and_zeros(scales_and_zeros)
-    w_dq = group_dequantize_tensor_from_qparams(weight_int8, scales, zeros, groupsize=groupsize)
+    w_dq = group_dequantize_tensor_symmetric(weight_int8, scales_and_zeros, groupsize)
     x = x.to(torch.float16)
     w_dq = w_dq.to(torch.float16)
     c = torch.ops.aten.linear(x, w_dq)
