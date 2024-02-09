@@ -13,7 +13,7 @@ from sentencepiece import SentencePieceProcessor
 
 try:
     from GPTQ import GenericGPTQRunner, InputRecorder
-    from eval import get_task_dict, evaluate
+    from eval import get_task_dict, evaluate, lm_eval
 except:
     pass
 
@@ -249,8 +249,14 @@ class GPTQQuantHandler(QuantHandler):
             calibration_seq_length,
             pad_calibration_inputs,
         )
+
+        try:
+            lm_eval.tasks.initialize_tasks()
+        except:
+            pass
         task_dict = get_task_dict(calibration_tasks)
         print("Obtaining GPTQ calibration inputs on: ", calibration_tasks)
+
         evaluate(
             input_recorder,
             task_dict,
