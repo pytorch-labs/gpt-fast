@@ -553,7 +553,7 @@ class Int8DynActInt4WeightLinear(torch.nn.Module):
         input = F.pad(input, pad=(0, self.in_features - self.origin_in_features))
         return linear_forward_8da4w(
             input,
-            self.weight, self.scales_and_zeros, self.out_features, self.groupsize
+            self.weight, self.scales_and_zeros, self.out_features, self.groupsize, self.precision
         )
 
 
@@ -573,7 +573,7 @@ class Int8DynActInt4WeightGPTQQuantHandler(GPTQQuantHandler):
         self.quantize_func = lambda w, qparams: \
             torch.ops.quantized_decomposed.quantize_per_channel_group(w, qparams[0], qparams[1], quant_min, quant_max, torch.int8, groupsize)
         self.dequantize_func = lambda q, qparams: \
-            torch.ops.quantized_decomposed.dequantize_per_channel_group(q, qparams[0], qparams[1], quant_min, quant_max, torch.int8, groupsize, out_dtype=self.precision)
+            torch.ops.quantized_decomposed.dequantize_per_channel_group(q, qparams[0], qparams[1], quant_min, quant_max, torch.int8, groupsize, self.precision)
         self.combine_qparams_list_func = lambda qparams_list: \
             [torch.cat(x, dim=1) for x in zip(*qparams_list)]
         # skip unless padding_allowed=True or its correctly sized
