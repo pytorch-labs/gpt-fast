@@ -283,7 +283,7 @@ def quantize_per_channel_group(
 
 
 @impl(quantized_decomposed_lib, "quantize_per_channel_group", "Meta")
-def quantize_per_channel_group(
+def quantize_per_channel_group_meta(
     input: torch.Tensor,
     scales: torch.Tensor,
     zero_points: torch.Tensor,
