@@ -72,10 +72,8 @@ class KVCache(nn.Module):
         # input_pos: [S], k_val: [B, H, S, D]
         assert input_pos.shape[0] == k_val.shape[2]
 
-        k_out = self.k_cache
-        v_out = self.v_cache
-        k_out[:, :, input_pos] = k_val
-        v_out[:, :, input_pos] = v_val
+        k_out = torch.ops.aten.index_put_(self.k_cache, [None, None, input_pos], k_val)
+        v_out = torch.ops.aten.index_put_(self.v_cache, [None, None, input_pos], v_val)
 
         return k_out, v_out
 
@@ -102,7 +100,7 @@ class Transformer(nn.Module):
         self.max_seq_length = max_seq_length
         self.max_batch_size = max_batch_size
         for b in self.layers:
-            b.attention.kv_cache = KVCache(max_batch_size, max_seq_length, self.config.n_local_heads, head_dim)
+            b.attention.kv_cache = KVCache(max_batch_size, max_seq_length, self.config.n_local_heads, head_dim, dtype=torch.float16)
 
         self.freqs_cis = precompute_freqs_cis(self.config.block_size, self.config.dim // self.config.n_head, self.config.rope_base)
         self.causal_mask = torch.tril(torch.ones(self.max_seq_length, self.max_seq_length, dtype=torch.bool))
@@ -223,7 +221,7 @@ def precompute_freqs_cis(
     freqs = torch.outer(t, freqs)
     freqs_cis = torch.polar(torch.ones_like(freqs), freqs)
     cache = torch.stack([freqs_cis.real, freqs_cis.imag], dim=-1)
-    return cache.to(dtype=torch.bfloat16)
+    return cache.to(dtype=torch.float16)
 
 
 def apply_rotary_emb(x: Tensor, freqs_cis: Tensor) -> Tensor:

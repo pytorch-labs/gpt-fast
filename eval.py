@@ -220,7 +220,8 @@ def main(
     assert tokenizer_path.is_file(), tokenizer_path
 
     device = 'cuda'
-    precision = torch.bfloat16
+    # precision = torch.bfloat16
+    precision = torch.float16
 
     print("Loading model ...")
     t0 = time.time()

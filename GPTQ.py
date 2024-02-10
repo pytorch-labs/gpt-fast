@@ -171,6 +171,7 @@ class GenericGPTQRunner(fx.Interpreter):
         combine_qparams_list_func,
         make_names_and_values_dict_func,
         skip_layer_func,
+        dyn_quant_func = None,
     ):
         # these functions need to already be curried with all inputs other than weight, qparams
         self.get_qparams_func = (
@@ -191,6 +192,8 @@ class GenericGPTQRunner(fx.Interpreter):
 
         self.make_names_and_values_dict_func = make_names_and_values_dict_func  # accepts [2d quantized tensor], [qparams], returns a dict of names, values to put in state_dict
         # note any final packing for storage should happen here
+
+        self.dyn_quant_func = dyn_quant_func
         return self
 
     def run(self):
@@ -263,6 +266,8 @@ class GenericGPTQRunner(fx.Interpreter):
                 quantize_linear
             ):  # calculate H instead of output (will run the linear eventually with updated weight)
                 x = cur_args[0].float()
+                if self.dyn_quant_func is not None:
+                    x = self.dyn_quant_func(x)
                 shape = x.shape
                 n = 1 if len(shape) == 2 else shape[0]
                 H *= total_batches / (total_batches + n)
