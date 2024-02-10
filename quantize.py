@@ -13,7 +13,7 @@ from sentencepiece import SentencePieceProcessor
 
 try:
     from GPTQ import GenericGPTQRunner, InputRecorder
-    from eval import get_task_dict, evaluate
+    from eval import get_task_dict, evaluate, lm_eval
 except:
     pass
 
@@ -249,14 +249,25 @@ class GPTQQuantHandler(QuantHandler):
             calibration_seq_length,
             pad_calibration_inputs,
         )
+
+        try:
+            lm_eval.tasks.initialize_tasks()
+        except:
+            pass
         task_dict = get_task_dict(calibration_tasks)
         print("Obtaining GPTQ calibration inputs on: ", calibration_tasks)
+
         evaluate(
             input_recorder,
             task_dict,
             limit=calibration_limit,
         )
         inputs = input_recorder.get_recorded_inputs()
+        assert inputs is not None, (
+            f"No inputs were collected, use a task other than {calibration_tasks}, "+
+            f"use option pad_calibration_inputs, or decrease calibration_sequence_length (currently "+
+            f"{calibration_seq_length})"
+        )
         print(f"Obtained {len(inputs[0].values)} calibration samples")
         return inputs
 
@@ -591,7 +602,7 @@ if __name__ == '__main__':
     parser.add_argument('--checkpoint_path', type=Path, default=Path("checkpoints/meta-llama/Llama-2-7b-chat-hf/model.pth"), help='Path to the model checkpoint to be quantized.')
     parser.add_argument('--mode', '-q', type=str, default='int8', choices=['int8', 'int4', 'int4-gptq'], help='type of quantization to perform')
     parser.add_argument('--groupsize', type=int, default=32, help='Group size for int4 quantization.')
-    parser.add_argument('--calibration_tasks', type=str, nargs='+', default=['hellaswag'], help='tasks to do gptq calibration on, if doing gptq')
+    parser.add_argument('--calibration_tasks', type=str, nargs='+', default=['wikitext'], help='tasks to do gptq calibration on, if doing gptq')
     parser.add_argument('--calibration_limit', type=int, default=1000, help='number of samples to use for gptq calibration')
     parser.add_argument('--calibration_seq_length', type=int, default=100, help='length of sequences to use for gptq calibration')
     parser.add_argument('--pad_calibration_inputs', type=bool, default=False, help='pads sequences shorter than calibration_seq_length to that length, yielding more calibration inputs but running much slower')
