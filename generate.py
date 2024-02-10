@@ -227,6 +227,15 @@ def _load_model(checkpoint_path, device, precision, use_tp):
         path_comps = checkpoint_path.name.split(".")
         assert path_comps[-2].startswith("g")
         groupsize = int(path_comps[-2][1:])
+
+        ### Embedding Quantization #######
+        # NOTE: this does not work yet: https://www.internalfb.com/phabricator/paste/view/P1183134452
+        # mainly because we don't have real weights at this point I think
+        # need to think about how to compose Embedding Quantization with GPTQ
+        # from quantize import EmbeddingOnlyInt8QuantHandler
+        # model = EmbeddingOnlyInt8QuantHandler(model, group_size=256).convert_for_runtime()
+        ### Embedding Quantization #######
+
         from quantize import Int8DynActInt4WeightGPTQQuantHandler
         simple_quantizer = Int8DynActInt4WeightGPTQQuantHandler(model, groupsize)
         model = simple_quantizer.convert_for_runtime()

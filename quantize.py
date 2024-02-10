@@ -695,12 +695,13 @@ class QuantizedGroupEmbedding(torch.nn.Module):
         self.dtype = dtype
         self.register_buffer("weight_int8", weight_int8)
         self.register_buffer("scales_and_zeros", scales_and_zeros)
-        self.precision = torch.float16
+        self.precision = dtype
 
     @torch.no_grad()
     def forward(self, indices: torch.Tensor) -> torch.Tensor:
         weight_dq = group_dequantize_tensor_symmetric(self.weight_int8, self.scales_and_zeros, self.group_size, self.precision)
-        return F.embedding(input, weight_dq)
+        x = F.embedding(indices, weight_dq)
+        return x
 
 ################################### END LLM Quantization for ExecuTorch ######################
 
@@ -777,8 +778,10 @@ def quantize(
         new_base_name = base_name.replace('.pth', f"{label}int4-gptq.g{groupsize}.pth")
     elif mode == '8da4w-gptq':
         print("Quantizing model weights for int8 dynamic quant and int4 weight quant affine per-channel groupwise quantization using GPTQ...")
+        # Trying to add embedding quantization here, this can run but we can't do this
+        # in generate.py (see comments in generate.py for explanations)
         # model = EmbeddingOnlyInt8QuantHandler(model, group_size=256).convert_for_runtime()
-
+        # model = model.to(dtype=precision, device=device)
         quant_handler = Int8DynActInt4WeightGPTQQuantHandler(model, groupsize)
 
         tokenizer_path = checkpoint_path.parent / "tokenizer.model"
