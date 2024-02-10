@@ -15,12 +15,11 @@ aten = torch.ops.aten
 
 from eval import (
     setup_cache_padded_seq_input_pos_max_seq_length_for_prefill,
-    encode_tokens,
-    eval_wrapper
+    GPTFastEvalWrapper
 )
 
 
-class InputRecorder(eval_wrapper):
+class InputRecorder(GPTFastEvalWrapper):
     """
     This is a fake evaluation wrapper that just records the inputs
     so that they can be used in calibration.
@@ -40,7 +39,7 @@ class InputRecorder(eval_wrapper):
         calibration_seq_length,
         pad_calibration_inputs=False,
     ):
-        super().__init__()
+        super().__init__(model, tokenizer, calibration_seq_length)
         self._model = model
         self._tokenizer = tokenizer
         self._device = torch.device("cpu")
@@ -64,39 +63,6 @@ class InputRecorder(eval_wrapper):
                 )
                 self.pad_calibration_inputs = False
 
-    @property
-    def eot_token_id(self):
-        return self._tokenizer.eos_id()
-
-    @property
-    def max_length(self):
-        return self.calibration_seq_length
-
-    @property
-    def max_gen_toks(self):
-        return 50
-
-    @property
-    def batch_size(self):
-        return 1
-
-    @property
-    def device(self):
-        return self._device
-
-    def tok_encode(self, string: str):
-        encoded = encode_tokens(
-            self._tokenizer, string, bos=True, device=self._device
-        )
-        # encoded is a pytorch tensor, but some internal logic in the
-        # eval harness expects it to be a list instead
-        # TODO: verify this for multi-batch as well
-        encoded = encoded.tolist()
-        return encoded
-
-    def tok_decode(self, tokens):
-        decoded = self._tokenizer.decode(tokens)
-        return decoded
 
     def add_input(self, args):
         if self.inputs is None:
@@ -146,8 +112,6 @@ class InputRecorder(eval_wrapper):
             (1, T, self.vocab_size), dtype=torch.bfloat16, device=self._device
         )
 
-    def _model_generate(self, context, max_length, eos_token_id):
-        raise Exception("unimplemented")
 
 
 class MultiInput:
