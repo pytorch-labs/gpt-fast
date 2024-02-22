@@ -19,6 +19,7 @@ For an in-depth walkthrough of what's in this codebase, see this [blog post](htt
 Projects inspired by gpt-fast in the community:
 
 - [gpt-blazing](https://github.com/armed-gpt/gpt-blazing): applies the same performance optimization strategy to more models (e.g., baichuan2).
+- [gptfast](https://github.com/MDK8888/GPTFast): applies a subset of the performance optimizations to all Huggingface models
 
 ## Installation
 [Download PyTorch nightly](https://pytorch.org/get-started/locally/)
