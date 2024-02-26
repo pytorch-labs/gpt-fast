@@ -14,7 +14,22 @@ This is *NOT* intended to be a "framework" or "library" - it is intended to show
 
 For an in-depth walkthrough of what's in this codebase, see this [blog post](https://pytorch.org/blog/accelerating-generative-ai-2/).
 
-We supported [Mixtral 8x7B](https://mistral.ai/news/mixtral-of-experts/) which is a high-quality sparse mixture of experts (MoE) model, see [this page](./mixtral-moe) for more details.
+## Supported Models
+
+### LLaMA family
+Please check the rest of this page about benchmark of LLaMA family models.
+
+### Mixtral 8x7B
+We also supported [Mixtral 8x7B](https://mistral.ai/news/mixtral-of-experts/) which is a high-quality sparse mixture of experts (MoE) model, the average token generation rates are:
+
+|                  |   1 GPU |    2 GPU  | 4 GPU  |    8 GPU    |
+|------------------|---------|-----------|--------|------------|
+|baseline(bfloat16)|    OOM  |    78.75  | 118.23 |  203.69    |
+|        int8      |   56.04 |    99.91  | 149.53 |  218.48    |
+
+Note that the benchmarks run on an 8xA100-80GB, power limited to 330W with a hybrid cube mesh topology. Note that all benchmarks are run at *batch size=1*, making the reported tokens/s numbers equivalent to "tokens/s/user". In addition, they are run with a very small prompt length (just 5 tokens).
+
+For more details about Mixtral 8x7B, please check [this page](./mixtral-moe).
 
 ## Community
 
