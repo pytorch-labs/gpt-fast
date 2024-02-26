@@ -14,6 +14,8 @@ This is *NOT* intended to be a "framework" or "library" - it is intended to show
 
 For an in-depth walkthrough of what's in this codebase, see this [blog post](https://pytorch.org/blog/accelerating-generative-ai-2/).
 
+We supported [Mixtral 8x7B](https://mistral.ai/news/mixtral-of-experts/) which is a high-quality sparse mixture of experts (MoE) model, see [this page](./mixtral-moe) for more details.
+
 ## Community
 
 Projects inspired by gpt-fast in the community:
