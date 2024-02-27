@@ -29,7 +29,7 @@ We also supported [Mixtral 8x7B](https://mistral.ai/news/mixtral-of-experts/) wh
 
 Note that the benchmarks run on an 8xA100-80GB, power limited to 330W with a hybrid cube mesh topology. Note that all benchmarks are run at *batch size=1*, making the reported tokens/s numbers equivalent to "tokens/s/user". In addition, they are run with a very small prompt length (just 5 tokens).
 
-For more details about Mixtral 8x7B, please check [this page](./mixtral-moe) or this [note](https://chilli.substack.com/p/short-supporting-mixtral-in-gpt-fast).
+For more details about Mixtral 8x7B, please check [this page](./mixtral-moe) or this [note](https://thonking.substack.com/p/short-supporting-mixtral-in-gpt-fast).
 
 ## Community
 
