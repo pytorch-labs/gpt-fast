@@ -50,6 +50,7 @@ class ModelArgs:
 
 
 transformer_configs = {
+    "gemma-2b": dict(dim=2048, vocab_size=256000, n_layer=18, n_head=8, n_local_heads=1, intermediate_size=16384),
     "CodeLlama-7b-Python-hf": dict(block_size=16384, vocab_size=32000, n_layer=32, dim = 4096, rope_base=1000000),
     "7B": dict(n_layer=32, n_head=32, dim=4096),
     "13B": dict(n_layer=40, n_head=40, dim=5120),
@@ -109,6 +110,7 @@ class Transformer(nn.Module):
         mask = self.causal_mask[None, None, input_pos]
         freqs_cis = self.freqs_cis[input_pos]
         x = self.tok_embeddings(idx)
+        x = (self.config.dim ** 0.5) * x
 
         for i, layer in enumerate(self.layers):
             x = layer(x, input_pos, freqs_cis, mask)
@@ -195,7 +197,7 @@ class FeedForward(nn.Module):
         self.w2 = nn.Linear(config.intermediate_size, config.dim, bias=False)
 
     def forward(self, x: Tensor) -> Tensor:
-        return self.w2(F.silu(self.w1(x)) * self.w3(x))
+        return self.w2(F.gelu(self.w1(x)) * self.w3(x))
 
 
 class RMSNorm(nn.Module):
@@ -209,7 +211,7 @@ class RMSNorm(nn.Module):
 
     def forward(self, x: Tensor) -> Tensor:
         output = self._norm(x.float()).type_as(x)
-        return output * self.weight
+        return output * (1 + self.weight)
 
 
 def precompute_freqs_cis(

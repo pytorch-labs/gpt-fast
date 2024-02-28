@@ -30,8 +30,10 @@ def convert_hf_checkpoint(
     config = ModelArgs.from_name(model_name)
     print(f"Model config {config.__dict__}")
 
+    from safetensors import safe_open
+
     # Load the json file containing weight mapping
-    model_map_json = checkpoint_dir / "pytorch_model.bin.index.json"
+    model_map_json = checkpoint_dir / "model.safetensors.index.json"
 
     assert model_map_json.is_file()
 
@@ -65,7 +67,8 @@ def convert_hf_checkpoint(
 
     merged_result = {}
     for file in sorted(bin_files):
-        state_dict = torch.load(str(file), map_location="cpu", mmap=True, weights_only=True)
+        state_dict = safe_open(str(file), framework="pt", device='cpu')
+        state_dict = {k: state_dict.get_tensor(k) for k in state_dict.keys()}
         merged_result.update(state_dict)
     final_result = {}
     for key, value in merged_result.items():
@@ -92,6 +95,9 @@ def convert_hf_checkpoint(
             del final_result[key]
             del final_result[key.replace("wq", "wk")]
             del final_result[key.replace("wq", "wv")]
+    if "output.weight" not in final_result:
+        final_result["output.weight"] = final_result["tok_embeddings.weight"]
+
     print(f"Saving checkpoint to {checkpoint_dir / 'model.pth'}")
     torch.save(final_result, checkpoint_dir / "model.pth")
 
