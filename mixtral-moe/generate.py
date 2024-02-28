@@ -15,7 +15,7 @@ import torch._inductor.config
 
 def device_sync(device):
     if "cuda" in device:
-        torch.cuda.synchronize()
+        torch.cuda.synchronize(device)
     elif "cpu" in device:
         pass
     else:
