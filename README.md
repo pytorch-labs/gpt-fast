@@ -59,6 +59,7 @@ meta-llama/Llama-2-13b-chat-hf
 meta-llama/Llama-2-70b-chat-hf
 codellama/CodeLlama-7b-Python-hf
 codellama/CodeLlama-34b-Python-hf
+teknium/OpenHermes-2.5-Mistral-7B
 ```
 
 For example, to convert Llama-2-7b-chat-hf
