@@ -29,7 +29,6 @@ class ModelArgs:
     head_dim: int = 64
     rope_base: float = 10000
     norm_eps: float = 1e-5
-    moe: bool = False
     num_experts: int = 8
     num_activated_experts: int = 2
 
@@ -53,13 +52,7 @@ class ModelArgs:
 
 
 transformer_configs = {
-    "Mixtral-8x7B-v0.1": dict(block_size=32768, n_layer=32, n_head=32, n_local_heads=8, dim=4096, intermediate_size=14336, rope_base=1000000.0, num_experts=8, num_activated_experts=2, moe=True),
-    "CodeLlama-7b-Python-hf": dict(block_size=16384, vocab_size=32000, n_layer=32, dim = 4096, rope_base=1000000),
-    "7B": dict(n_layer=32, n_head=32, dim=4096),
-    "13B": dict(n_layer=40, n_head=40, dim=5120),
-    "30B": dict(n_layer=60, n_head=52, dim=6656),
-    "34B": dict(n_layer=48, n_head=64, dim=8192, vocab_size=32000, n_local_heads=8, intermediate_size=22016, rope_base=1000000), # CodeLlama-34B-Python-hf
-    "70B": dict(n_layer=80, n_head=64, dim=8192, n_local_heads=8, intermediate_size=28672),
+    "Mixtral-8x7B-v0.1": dict(block_size=32768, n_layer=32, n_head=32, n_local_heads=8, dim=4096, intermediate_size=14336, rope_base=1000000.0, num_experts=8, num_activated_experts=2),
 }
 
 class KVCache(nn.Module):
@@ -129,19 +122,13 @@ class TransformerBlock(nn.Module):
     def __init__(self, config: ModelArgs) -> None:
         super().__init__()
         self.attention = Attention(config)
-        if config.moe:
-            self.block_sparse_moe = MOEFeedForward(config)
-        else:
-            self.feed_forward = FeedForward(config)
+        self.block_sparse_moe = MOEFeedForward(config)
         self.ffn_norm = RMSNorm(config.dim, config.norm_eps)
         self.attention_norm = RMSNorm(config.dim, config.norm_eps)
 
     def forward(self, x: Tensor, input_pos: Tensor, freqs_cis: Tensor, mask: Tensor) -> Tensor:
         h = x + self.attention(self.attention_norm(x), freqs_cis, mask, input_pos)
-        if hasattr(self, "block_sparse_moe"):
-            out = h + self.block_sparse_moe(self.ffn_norm(h))
-        else:
-            out = h + self.feed_forward(self.ffn_norm(h))
+        out = h + self.block_sparse_moe(self.ffn_norm(h))
         return out
 
 
@@ -195,17 +182,6 @@ class Attention(nn.Module):
 
         y = self.wo(y)
         return y
-
-
-class FeedForward(nn.Module):
-    def __init__(self, config: ModelArgs) -> None:
-        super().__init__()
-        self.w1 = nn.Linear(config.dim, config.intermediate_size, bias=False)
-        self.w3 = nn.Linear(config.dim, config.intermediate_size, bias=False)
-        self.w2 = nn.Linear(config.intermediate_size, config.dim, bias=False)
-
-    def forward(self, x: Tensor) -> Tensor:
-        return self.w2(F.silu(self.w1(x)) * self.w3(x))
 
 
 class ConditionalFeedForward(nn.Module):

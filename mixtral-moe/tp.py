@@ -11,8 +11,7 @@ import torch.distributed as dist
 from torch import nn
 from torch.distributed import _functional_collectives as funcol
 
-from model import Attention, FeedForward, MOEFeedForward, Transformer
-from quantize import WeightOnlyInt4Linear
+from model import Attention, MOEFeedForward, Transformer
 
 
 def _get_rank() -> int:
@@ -81,20 +80,11 @@ def _apply_tp_linear(linear: nn.Linear, style: str, weight_splits: List[int] = [
         # attention
         assert len(weight_splits) == 3
 
-        if isinstance(linear, WeightOnlyInt4Linear):
-            sharded_weight = shard_qkv(linear.weight, shard_dim, [i//8 for i in weight_splits])
-            linear.scales_and_zeros = shard_qkv(linear.scales_and_zeros, 1 - shard_dim, weight_splits)
-        else:
-            sharded_weight = shard_qkv(linear.weight, shard_dim, weight_splits)
+        sharded_weight = shard_qkv(linear.weight, shard_dim, weight_splits)
         if hasattr(linear, "scales") and style == "colwise":
             linear.scales = shard_qkv(linear.scales, 0, weight_splits)
     else:
         sharded_weight = shard(linear.weight, shard_dim)
-        if isinstance(linear, WeightOnlyInt4Linear):
-            linear.scales_and_zeros = shard(linear.scales_and_zeros, 1 - shard_dim)
-            if style == "rowwise":
-                assert linear.scales_and_zeros.shape[0] * 32 == sharded_weight.shape[1] * sharded_weight.shape[2] * sharded_weight.shape[3]
-                assert linear.scales_and_zeros.shape[1] == sharded_weight.shape[0] * 8
         if hasattr(linear, "scales") and style == "colwise":
             linear.scales = shard(linear.scales, 0)
 
@@ -104,20 +94,6 @@ def _apply_tp_linear(linear: nn.Linear, style: str, weight_splits: List[int] = [
 
     # shape info should still be synced
     # assert linear.weight.shape == (linear.out_features, linear.in_features)
-
-
-def _apply_tp_ffn(mlp: FeedForward) -> None:
-    assert hasattr(mlp, "w1")
-    assert hasattr(mlp, "w3")
-    assert hasattr(mlp, "w2")
-
-    _apply_tp_linear(mlp.w1, "colwise")
-    _apply_tp_linear(mlp.w3, "colwise")
-    _apply_tp_linear(mlp.w2, "rowwise")
-
-    world_size = _get_world_size()
-    mlp.register_forward_hook(lambda _module, _input, output: funcol.all_reduce(
-        output, "sum", list(range(world_size))))
 
 
 def _apply_tp_moe_ffn(mlp: MOEFeedForward) -> None:
@@ -167,8 +143,5 @@ def apply_tp(model: Transformer) -> None:
     _apply_tp_Transformer(model)
     for block in model.layers:
         # Apply to MLP
-        if model.config.moe:
-            _apply_tp_moe_ffn(block.block_sparse_moe)
-        else:
-            _apply_tp_ffn(block.feed_forward)
+        _apply_tp_moe_ffn(block.block_sparse_moe)
         _apply_tp_attn(block.attention)
