@@ -45,7 +45,13 @@ class ModelArgs:
             return cls(**transformer_configs[name])
         # fuzzy search
         config = [config for config in transformer_configs if config in str(name).upper() or config in str(name)]
-        assert len(config) == 1, name
+
+        # We may have two or more configs matched (e.g. "7B" and "Mistral-7B"). Find the best config match,
+        # take longer name (as it have more symbols matched)
+        if len(config) > 1:
+            config.sort(key=len, reverse=True)
+            assert len(config[0]) != len(config[1]), name # make sure only one 'best' match
+
         return cls(**transformer_configs[config[0]])
 
 
@@ -56,6 +62,7 @@ transformer_configs = {
     "30B": dict(n_layer=60, n_head=52, dim=6656),
     "34B": dict(n_layer=48, n_head=64, dim=8192, vocab_size=32000, n_local_heads=8, intermediate_size=22016, rope_base=1000000), # CodeLlama-34B-Python-hf
     "70B": dict(n_layer=80, n_head=64, dim=8192, n_local_heads=8, intermediate_size=28672),
+    "Mistral-7B": dict(n_layer=32, n_head=32, n_local_heads=8, dim=4096, intermediate_size=14336, vocab_size=32000),
 }
 
 class KVCache(nn.Module):
