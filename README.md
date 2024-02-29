@@ -22,10 +22,10 @@ Please check the rest of this page about benchmark of LLaMA family models.
 ### Mixtral 8x7B
 We also supported [Mixtral 8x7B](https://mistral.ai/news/mixtral-of-experts/) which is a high-quality sparse mixture of experts (MoE) model, the average token generation rates are:
 
-|                  |   1 GPU |    2 GPU  | 4 GPU  |    8 GPU    |
+|                  |   1 GPU |    2 GPU  | 4 GPU  |    8 GPU   |
 |------------------|---------|-----------|--------|------------|
-|baseline(bfloat16)|    OOM  |    78.75  | 118.23 |  203.69    |
-|        int8      |   56.04 |    99.91  | 149.53 |  218.48    |
+|baseline(bfloat16)|    OOM  |    96.67  | 155.35 |  227.82    |
+|        int8      |   97.92 |   155.03  | 216.87 |  279.35    |
 
 Note that the benchmarks run on an 8xA100-80GB, power limited to 330W with a hybrid cube mesh topology. Note that all benchmarks are run at *batch size=1*, making the reported tokens/s numbers equivalent to "tokens/s/user". In addition, they are run with a very small prompt length (just 5 tokens).
 
@@ -59,6 +59,9 @@ meta-llama/Llama-2-13b-chat-hf
 meta-llama/Llama-2-70b-chat-hf
 codellama/CodeLlama-7b-Python-hf
 codellama/CodeLlama-34b-Python-hf
+mistralai/Mistral-7B-v0.1
+mistralai/Mistral-7B-Instruct-v0.1
+mistralai/Mistral-7B-Instruct-v0.2
 ```
 
 For example, to convert Llama-2-7b-chat-hf
@@ -120,6 +123,11 @@ python generate.py --compile --checkpoint_path checkpoints/$MODEL_REPO/model.pth
 To squeeze out a little bit more performance, you can also compile the prefill with `--compile_prefill`. This will increase compilation times though.
 
 ## Quantization
+Choose device to use by
+```bash
+# The current support devices: cuda, cpu
+export DEVICE=cuda
+```
 ### Int8 Weight-Only Quantization
 To generate this version of the model
 ```bash
@@ -128,19 +136,19 @@ python quantize.py --checkpoint_path checkpoints/$MODEL_REPO/model.pth --mode in
 ```
 To run with int8, just pass the int8 checkpoint to generate.py.
 ```bash
-python generate.py --compile --checkpoint_path checkpoints/$MODEL_REPO/model_int8.pth
+python generate.py --compile --checkpoint_path checkpoints/$MODEL_REPO/model_int8.pth --device $DEVICE
 ```
 
 ### Int4 Weight-Only Quantization
 To generate int4 version of model
 ```bash
-# Spits out model at checkpoints/$MODEL_REPO/model_int4.g32.pth
-python quantize.py --checkpoint_path checkpoints/$MODEL_REPO/model.pth --mode int4 --groupsize 32
+# Spits out model at checkpoints/$MODEL_REPO/model_int4.g32.$DEVICE.pth
+python quantize.py --checkpoint_path checkpoints/$MODEL_REPO/model.pth --mode int4 --groupsize 32 --device $DEVICE
 ```
 
 To run with int4, just pass the int4 checkpoint to generate.py.
 ```bash
-python generate.py --checkpoint_path checkpoints/$MODEL_REPO/model_int4.g32.pth --compile
+python generate.py --checkpoint_path checkpoints/$MODEL_REPO/model_int4.g32.$DEVICE.pth --compile --device $DEVICE
 ```
 
 ## Speculative Sampling
