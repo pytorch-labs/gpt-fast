@@ -25,6 +25,8 @@ def device_sync(device):
 torch._inductor.config.coordinate_descent_tuning = True
 torch._inductor.config.triton.unique_kernel_names = True
 torch._inductor.config.fx_graph_cache = True # Experimental feature to reduce compilation times, will be on by default in future
+if hasattr(torch._dynamo.config, "max_loop_unroll_nodes"):
+    torch._dynamo.config.max_loop_unroll_nodes = 7500
 
 
 # support running without installing as a package
