@@ -157,7 +157,7 @@ def generate(
     T = prompt.size(0)
     T_new = T + max_new_tokens
     if interactive:
-        max_seq_length = 350
+        max_seq_length = T_new
     else:
         max_seq_length = min(T_new, model.config.block_size)
 
@@ -278,7 +278,7 @@ def main(
     print(f"Using device={device}")
     precision = torch.bfloat16
     is_speculative = draft_checkpoint_path is not None
-    is_chat = "chat" in str(checkpoint_path)
+    is_chat = "chat" in str(checkpoint_path) or "instruct" in str(checkpoint_path)
 
     print("Loading model ...")
     t0 = time.time()
@@ -293,6 +293,7 @@ def main(
     print(f"Time to load model: {time.time() - t0:.02f} seconds")
 
     tokenizer = SentencePieceProcessor(model_file=str(tokenizer_path))
+    prompt = "Explain the importance of low latency LLMs."
     encoded = encode_tokens(tokenizer, prompt, bos=True, device=device)
     prompt_length = encoded.size(0)
 
@@ -324,26 +325,43 @@ def main(
 
     for i in range(start, num_samples):
         device_sync(device=device) # MKG
+        for _ in range(20):
+            print()
         if i >= 0 and interactive:
-            prompt = input("What is your prompt? ")
+            from tp import is_local
+            print("""
+   _____ _____ _______     ______        _
+  / ____|  __ \__   __|   |  ____|      | |
+ | |  __| |__) | | |______| |__ __ _ ___| |_
+ | | |_ |  ___/  | |______|  __/ _` / __| __|
+ | |__| | |      | |      | | | (_| \__ \ |_
+  \_____|_|      |_|      |_|  \__,_|___/\__|
+"""
+)
+            if is_local():
+                prompt = input("[Mixtral 8x7B] What do you want to chat about?")
+            prompt = "Explain the importance of low latency LLMs."
             if is_chat:
                 prompt = f"{B_INST} {prompt.strip()} {E_INST}"
             encoded = encode_tokens(tokenizer, prompt, bos=True, device=device)
 
         if interactive and i >= 0:
-            buffer = []
+            buffer = torch.zeros(20, device='cuda', dtype=torch.int)
+            idx = 0
             period_id = tokenizer.encode('.')[0]
             done_generating = False
             def callback(x):
-                nonlocal done_generating
+                nonlocal done_generating, idx
                 if done_generating:
                     return
-                buffer.append(tokenizer.decode([period_id] + x.tolist())[1:])
+                buffer[idx] = x
+                idx += 1
                 if x.item() == tokenizer.eos_id():
                     done_generating = True
-                if len(buffer) == 4 or done_generating:
-                    print(''.join(buffer), end='', flush=True)
-                    buffer.clear()
+                if idx == 20 or done_generating:
+                    new_buf = tokenizer.decode([period_id] + buffer.tolist())[1:]
+                    idx = 0
+                    print(''.join(new_buf), end='', flush=True)
                 # print(, end='', flush=True)
         else:
             callback = lambda x : x
@@ -387,6 +405,7 @@ def main(
         aggregate_metrics['tokens_per_sec'].append(tokens_sec)
         print(f"Time for inference {i + 1}: {t:.02f} sec total, {tokens_sec:.02f} tokens/sec")
         print(f"Bandwidth achieved: {model_size * tokens_sec / 1e9:.02f} GB/s")
+        torch.distributed.breakpoint()
     print("==========")
     if is_speculative:
         counts_aggregated = [sum(i) for i in zip(*aggregate_metrics['accept_counts'])]

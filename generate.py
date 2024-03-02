@@ -156,7 +156,7 @@ def generate(
     T = prompt.size(0)
     T_new = T + max_new_tokens
     if interactive:
-        max_seq_length = 350
+        max_seq_length = T_new
     else:
         max_seq_length = min(T_new, model.config.block_size)
 
