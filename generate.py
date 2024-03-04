@@ -227,7 +227,7 @@ def _load_model(checkpoint_path, device, precision, use_tp):
         print("Using int4 weight-only quantization!")
         path_comps = checkpoint_path.name.split(".")
         assert path_comps[-3].startswith("g")
-        assert path_comps[-2] in device
+        assert path_comps[-2] in device, "weight packed format mismatch, please rerun quantize.py!"
         groupsize = int(path_comps[-3][1:])
         from quantize import WeightOnlyInt4QuantHandler
         simple_quantizer = WeightOnlyInt4QuantHandler(model, groupsize)
