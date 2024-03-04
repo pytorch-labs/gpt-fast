@@ -326,8 +326,8 @@ class WeightOnlyInt8QuantHandler:
         for fqn, mod in self.mod.named_modules():
             if isinstance(mod, torch.nn.Linear):
                 int8_weight, scales, _ = dynamically_quantize_per_channel(mod.weight.float(), -128, 127, torch.int8)
-                cur_state_dict[f"{fqn}.weight"] = int8_weight
-                cur_state_dict[f"{fqn}.scales"] = scales.to(mod.weight.dtype)
+                cur_state_dict[f"{fqn}.weight"] = int8_weight.to('cpu')
+                cur_state_dict[f"{fqn}.scales"] = scales.to(mod.weight.dtype).to('cpu')
 
         return cur_state_dict
 
@@ -376,21 +376,21 @@ def linear_forward_int4(x, weight_int4pack, scales_and_zeros, out_features, grou
 def _check_linear_int4_k(k, groupsize = 1, inner_k_tiles = 1):
     return k % groupsize == 0 and k % (inner_k_tiles * 16) == 0
 
-def replace_linear_int4(module, groupsize, inner_k_tiles, padding):
+def replace_linear_int4(module, groupsize, inner_k_tiles, padding, use_cuda):
     for name, child in module.named_children():
         if isinstance(child, nn.Linear):
             if _check_linear_int4_k(child.in_features, groupsize, inner_k_tiles):
                 setattr(module, name, WeightOnlyInt4Linear(
                     child.in_features, child.out_features, bias=False,
-                    groupsize=groupsize, inner_k_tiles=inner_k_tiles, padding=False,
+                    groupsize=groupsize, inner_k_tiles=inner_k_tiles, padding=False, use_cuda=use_cuda
                 ))
             elif padding:
                 setattr(module, name, WeightOnlyInt4Linear(
                     child.in_features, child.out_features, bias=False,
-                    groupsize=groupsize, inner_k_tiles=inner_k_tiles, padding=True,
+                    groupsize=groupsize, inner_k_tiles=inner_k_tiles, padding=True, use_cuda=use_cuda
                 ))
         else:
-            replace_linear_int4(child, groupsize, inner_k_tiles, padding)
+            replace_linear_int4(child, groupsize, inner_k_tiles, padding, use_cuda)
 
 
 class WeightOnlyInt4QuantHandler:
@@ -403,12 +403,7 @@ class WeightOnlyInt4QuantHandler:
         assert inner_k_tiles in [2, 4, 8]
 
     @torch.no_grad()
-    def create_quantized_state_dict(self, use_cuda = True):
-        if use_cuda:
-            device="cuda"
-        else:
-            device="cpu"
-
+    def create_quantized_state_dict(self):
         cur_state_dict = self.mod.state_dict()
         for fqn, mod in self.mod.named_modules():
             if isinstance(mod, torch.nn.Linear):
@@ -431,15 +426,15 @@ class WeightOnlyInt4QuantHandler:
                             "and that groupsize and inner_k_tiles*16 evenly divide into it")
                         continue
                 weight_int4pack, scales_and_zeros = prepare_int4_weight_and_scales_and_zeros(
-                    weight.to(torch.bfloat16).to(device=device), self.groupsize, self.inner_k_tiles
+                    weight.to(torch.bfloat16), self.groupsize, self.inner_k_tiles
                 )
                 cur_state_dict[f"{fqn}.weight"] = weight_int4pack.to('cpu')
                 cur_state_dict[f"{fqn}.scales_and_zeros"] = scales_and_zeros.to('cpu')
 
         return cur_state_dict
 
-    def convert_for_runtime(self):
-        replace_linear_int4(self.mod, self.groupsize, self.inner_k_tiles, self.padding)
+    def convert_for_runtime(self, use_cuda):
+        replace_linear_int4(self.mod, self.groupsize, self.inner_k_tiles, self.padding, use_cuda)
         return self.mod
 
 class WeightOnlyInt4GPTQQuantHandler(GPTQQuantHandler):
@@ -476,8 +471,8 @@ class WeightOnlyInt4GPTQQuantHandler(GPTQQuantHandler):
         super().__init__()
 
 
-    def convert_for_runtime(self):
-        replace_linear_int4(self.mod, self.groupsize, self.inner_k_tiles, self.padding)
+    def convert_for_runtime(self, use_cuda):
+        replace_linear_int4(self.mod, self.groupsize, self.inner_k_tiles, self.padding, use_cuda)
         return self.mod
 
 class WeightOnlyInt4Linear(torch.nn.Module):
@@ -488,7 +483,7 @@ class WeightOnlyInt4Linear(torch.nn.Module):
 
     def __init__(
             self, in_features: int, out_features: int,
-            bias=True, device=None, dtype=None, groupsize: int = 128, inner_k_tiles: int = 8, padding: bool = True,
+            bias=True, device=None, dtype=None, groupsize: int = 128, inner_k_tiles: int = 8, padding: bool = True, use_cuda=True,
     ) -> None:
         super().__init__()
         self.padding = padding
@@ -505,10 +500,16 @@ class WeightOnlyInt4Linear(torch.nn.Module):
 
         assert out_features % 8 == 0, "require out_features % 8 == 0"
         assert in_features % (inner_k_tiles * 16) == 0, "require in_features % (innerKTiles * 16) == 0"
-        self.register_buffer(
-            "weight",
-            torch.empty((out_features // 8, in_features // (inner_k_tiles * 16), 32, inner_k_tiles // 2), dtype=torch.int32)
-        )
+        if use_cuda:
+            self.register_buffer(
+                "weight",
+                torch.empty((out_features // 8, in_features // (inner_k_tiles * 16), 32, inner_k_tiles // 2), dtype=torch.int32)
+            )
+        else:
+            self.register_buffer(
+                "weight",
+                torch.empty((out_features, in_features // 2), dtype=torch.uint8)
+            )
         self.register_buffer(
             "scales_and_zeros",
             torch.empty((in_features // groupsize, out_features, 2), dtype=torch.bfloat16)
@@ -538,10 +539,10 @@ def quantize(
     percdamp: float = .01,
     blocksize: int = 128,
     label: str = '',
+    device: str = 'cuda',
 ) -> None:
     assert checkpoint_path.is_file(), checkpoint_path
 
-    device = 'cpu'
     precision = torch.bfloat16
 
     print("Loading model ...")
@@ -565,12 +566,13 @@ def quantize(
 
     elif mode == 'int4':
         print("Quantizing model weights for int4 weight-only affine per-channel groupwise quantization")
+        print(f"Prepacking model weights in {device} optimal layout")
         quant_handler = WeightOnlyInt4QuantHandler(model, groupsize)
         quantized_state_dict = quant_handler.create_quantized_state_dict()
 
         dir_name = checkpoint_path.parent
         base_name = checkpoint_path.name
-        new_base_name = base_name.replace('.pth', f"{label}int4.g{groupsize}.pth")
+        new_base_name = base_name.replace('.pth', f"{label}int4.g{groupsize}.{device}.pth")
 
     elif mode == 'int4-gptq':
         print("Quantizing model weights for int4 weight-only affine per-channel groupwise quantization using GPTQ...")
@@ -617,6 +619,7 @@ if __name__ == '__main__':
     parser.add_argument('--percdamp', type=float, default=.01, help='gptq percentage dampening')
     parser.add_argument('--blocksize', type=int, default=128, help='blocksize for gptq')
     parser.add_argument('--label', type=str, default='_', help='label to add to output filename')
+    parser.add_argument('--device', type=str, default='cuda', help='device to use')
 
     args = parser.parse_args()
-    quantize(args.checkpoint_path, args.mode, args.groupsize, args.calibration_tasks, args.calibration_limit, args.calibration_seq_length, args.pad_calibration_inputs, args.percdamp, args.blocksize, args.label)
+    quantize(args.checkpoint_path, args.mode, args.groupsize, args.calibration_tasks, args.calibration_limit, args.calibration_seq_length, args.pad_calibration_inputs, args.percdamp, args.blocksize, args.label, args.device)
