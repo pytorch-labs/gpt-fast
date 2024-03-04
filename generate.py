@@ -213,6 +213,7 @@ def encode_tokens(tokenizer, string, bos=True, device='cuda'):
     return torch.tensor(tokens, dtype=torch.int, device=device)
 
 def _load_model(checkpoint_path, device, precision, use_tp):
+    use_cuda = 'cuda' in device
     with torch.device('meta'):
         model = Transformer.from_name(checkpoint_path.parent.name)
 
@@ -223,13 +224,14 @@ def _load_model(checkpoint_path, device, precision, use_tp):
         model = simple_quantizer.convert_for_runtime()
 
     if "int4" in str(checkpoint_path):
-        print("Using int4 quantization!")
+        print("Using int4 weight-only quantization!")
         path_comps = checkpoint_path.name.split(".")
-        assert path_comps[-2].startswith("g")
-        groupsize = int(path_comps[-2][1:])
+        assert path_comps[-3].startswith("g")
+        assert path_comps[-2] in device
+        groupsize = int(path_comps[-3][1:])
         from quantize import WeightOnlyInt4QuantHandler
         simple_quantizer = WeightOnlyInt4QuantHandler(model, groupsize)
-        model = simple_quantizer.convert_for_runtime()
+        model = simple_quantizer.convert_for_runtime(use_cuda)
 
     checkpoint = torch.load(str(checkpoint_path), mmap=True, weights_only=True)
     model.load_state_dict(checkpoint, assign=True)
@@ -412,7 +414,7 @@ if __name__ == '__main__':
     parser.add_argument('--profile', type=Path, default=None, help='Profile path.')
     parser.add_argument('--speculate_k', type=int, default=5, help='Speculative execution depth.')
     parser.add_argument('--draft_checkpoint_path', type=Path, default=None, help='Draft checkpoint path.')
-    parser.add_argument('--device', type=str, default="cuda", help='device to use')
+    parser.add_argument('--device', type=str, default="cuda", help='Device to use')
 
     args = parser.parse_args()
     main(
