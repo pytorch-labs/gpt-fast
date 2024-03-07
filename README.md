@@ -123,6 +123,11 @@ python generate.py --compile --checkpoint_path checkpoints/$MODEL_REPO/model.pth
 To squeeze out a little bit more performance, you can also compile the prefill with `--compile_prefill`. This will increase compilation times though.
 
 ## Quantization
+Choose device to use by
+```bash
+# The current support devices: cuda, cpu
+export DEVICE=cuda
+```
 ### Int8 Weight-Only Quantization
 To generate this version of the model
 ```bash
@@ -131,19 +136,19 @@ python quantize.py --checkpoint_path checkpoints/$MODEL_REPO/model.pth --mode in
 ```
 To run with int8, just pass the int8 checkpoint to generate.py.
 ```bash
-python generate.py --compile --checkpoint_path checkpoints/$MODEL_REPO/model_int8.pth
+python generate.py --compile --checkpoint_path checkpoints/$MODEL_REPO/model_int8.pth --device $DEVICE
 ```
 
 ### Int4 Weight-Only Quantization
 To generate int4 version of model
 ```bash
-# Spits out model at checkpoints/$MODEL_REPO/model_int4.g32.pth
-python quantize.py --checkpoint_path checkpoints/$MODEL_REPO/model.pth --mode int4 --groupsize 32
+# Spits out model at checkpoints/$MODEL_REPO/model_int4.g32.$DEVICE.pth
+python quantize.py --checkpoint_path checkpoints/$MODEL_REPO/model.pth --mode int4 --groupsize 32 --device $DEVICE
 ```
 
 To run with int4, just pass the int4 checkpoint to generate.py.
 ```bash
-python generate.py --checkpoint_path checkpoints/$MODEL_REPO/model_int4.g32.pth --compile
+python generate.py --checkpoint_path checkpoints/$MODEL_REPO/model_int4.g32.$DEVICE.pth --compile --device $DEVICE
 ```
 
 ## Speculative Sampling
