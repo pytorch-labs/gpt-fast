@@ -79,7 +79,7 @@ def convert_hf_checkpoint(
         elif "w1" in key or "w3" in key:
             final_result[key] = final_result[key].reshape(config.num_experts, config.intermediate_size, config.dim).contiguous()
         elif "w2" in key:
-            final_result[key] = final_result[key].reshape(config.num_experts, config.dim, config.intermediate_size).contiguous()
+            final_result[key] = final_result[key].reshape(config.num_experts, config.intermediate_size, config.dim).permute(0, 2, 1).contiguous()
         elif "gate" in key:
             final_result[key] = final_result[key].contiguous()
 
