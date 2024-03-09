@@ -75,11 +75,11 @@ class WeightOnlyBit8QuantHandler:
                 cur_state_dict[f"{fqn}.weight"] = int8_weight
                 cur_state_dict[f"{fqn}.scales"] = scales.to(mod.weight.dtype)
             elif isinstance(mod, ConditionalFeedForward):
-                num_experts, intermediate_size, dim = mod.w1.shape
                 for weight_idx in range(0, 3):
                     weight_name = f"w{weight_idx + 1}"
                     scales_name = f"scales{weight_idx + 1}"
                     weight = getattr(mod, weight_name)
+                    num_experts, intermediate_size, dim = weight.shape
 
                     bit8_weight_list = []
                     scales_list = []
@@ -125,20 +125,20 @@ class ConditionalFeedForwardBit8(nn.Module):
         self.target_dtype = target_dtype
 
         self.register_buffer("w1", torch.empty(num_experts, intermediate_size, dim, dtype=target_dtype))
-        self.register_buffer("w2", torch.empty(num_experts, intermediate_size, dim, dtype=target_dtype))
+        self.register_buffer("w2", torch.empty(num_experts, dim, intermediate_size, dtype=target_dtype))
         self.register_buffer("w3", torch.empty(num_experts, intermediate_size, dim, dtype=target_dtype))
 
         self.register_buffer("scales1", torch.empty(num_experts, intermediate_size, dtype=torch.bfloat16))
-        self.register_buffer("scales2", torch.empty(num_experts, intermediate_size, dtype=torch.bfloat16))
+        self.register_buffer("scales2", torch.empty(num_experts, dim, dtype=torch.bfloat16))
         self.register_buffer("scales3", torch.empty(num_experts, intermediate_size, dtype=torch.bfloat16))
 
     def forward(self, x, expert_indices):
-        w1_weights = (self.w1.to(x.dtype)[expert_indices] * self.scales1[expert_indices].to(x.dtype).unsqueeze(-1)).transpose(-1, -2)  # [T, A, D, D]
-        w3_weights = (self.w3.to(x.dtype)[expert_indices] * self.scales3[expert_indices].to(x.dtype).unsqueeze(-1)).transpose(-1, -2)  # [T, A, D, D]
-        w2_weights = (self.w2.to(x.dtype)[expert_indices] * self.scales2[expert_indices].to(x.dtype).unsqueeze(-1))  # [T, A, D, D]
-        x1 = F.silu(torch.einsum('ti,taio -> tao', x, w1_weights))
-        x3 = torch.einsum('ti, taio -> tao', x, w3_weights)
-        expert_outs = torch.einsum('tao, taoi -> tai', (x1 * x3), w2_weights)
+        w1_weights = self.w1.to(x.dtype)[expert_indices] # [T, A, D, D]
+        w3_weights = self.w3.to(x.dtype)[expert_indices] # [T, A, D, D]
+        w2_weights = self.w2.to(x.dtype)[expert_indices]
+        x1 = F.silu(torch.einsum('ti,taoi -> tao', x, w1_weights) * self.scales1[expert_indices].to(x.dtype))
+        x3 = torch.einsum('ti, taoi -> tao', x, w3_weights) * self.scales3[expert_indices].to(x.dtype)
+        expert_outs = torch.einsum('tao, taio -> tai', (x1 * x3), w2_weights) * self.scales2[expert_indices].to(x.dtype)  # [T, A, D, D]
         return expert_outs
 
 
