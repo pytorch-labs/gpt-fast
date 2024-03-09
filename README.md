@@ -22,10 +22,10 @@ Please check the rest of this page about benchmark of LLaMA family models.
 ### Mixtral 8x7B
 We also supported [Mixtral 8x7B](https://mistral.ai/news/mixtral-of-experts/) which is a high-quality sparse mixture of experts (MoE) model, the average token generation rates are:
 
-|                  |   1 GPU |    2 GPU  | 4 GPU  |    8 GPU    |
+|                  |   1 GPU |    2 GPU  | 4 GPU  |    8 GPU   |
 |------------------|---------|-----------|--------|------------|
-|baseline(bfloat16)|    OOM  |    78.75  | 118.23 |  203.69    |
-|        int8      |   56.04 |    99.91  | 149.53 |  218.48    |
+|baseline(bfloat16)|    OOM  |    96.67  | 155.35 |  227.82    |
+|        int8      |   97.92 |   155.03  | 216.87 |  279.35    |
 
 Note that the benchmarks run on an 8xA100-80GB, power limited to 330W with a hybrid cube mesh topology. Note that all benchmarks are run at *batch size=1*, making the reported tokens/s numbers equivalent to "tokens/s/user". In addition, they are run with a very small prompt length (just 5 tokens).
 
