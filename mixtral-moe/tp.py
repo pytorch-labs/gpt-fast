@@ -99,12 +99,12 @@ def _apply_tp_linear(linear: nn.Linear, style: str, weight_splits: List[int] = [
 def _apply_tp_moe_ffn(mlp: MOEFeedForward) -> None:
     mlp.cond_ffn.w1 = nn.Parameter(shard(mlp.cond_ffn.w1, 1), requires_grad=False)
     mlp.cond_ffn.w3 = nn.Parameter(shard(mlp.cond_ffn.w3, 1), requires_grad=False)
-    mlp.cond_ffn.w2 = nn.Parameter(shard(mlp.cond_ffn.w2, 1), requires_grad=False)
+    mlp.cond_ffn.w2 = nn.Parameter(shard(mlp.cond_ffn.w2, 2), requires_grad=False)
 
     if hasattr(mlp.cond_ffn, "scales1"):
         mlp.cond_ffn.scales1 = nn.Parameter(shard(mlp.cond_ffn.scales1, 1), requires_grad=False)
         mlp.cond_ffn.scales3 = nn.Parameter(shard(mlp.cond_ffn.scales3, 1), requires_grad=False)
-        mlp.cond_ffn.scales2 = nn.Parameter(shard(mlp.cond_ffn.scales2, 1), requires_grad=False)
+        mlp.cond_ffn.scales2 = nn.Parameter(mlp.cond_ffn.scales2, requires_grad=False)
 
     world_size = _get_world_size()
     mlp.cond_ffn.register_forward_hook(lambda _module, _input, output: funcol.all_reduce(
