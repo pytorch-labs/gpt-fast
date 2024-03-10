@@ -183,7 +183,6 @@ class Attention(nn.Module):
         y = self.wo(y)
         return y
 
-import torch.distributed
 
 class ConditionalFeedForward(nn.Module):
     def __init__(self, config):
