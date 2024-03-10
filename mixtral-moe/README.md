@@ -14,8 +14,8 @@ Benchmarks run on an 8xA100-80GB, power limited to 330W with a hybrid cube mesh 
 
 |                  |   1 GPU |    2 GPU  | 4 GPU  |    8 GPU   |
 |------------------|---------|-----------|--------|------------|
-|baseline(bfloat16)|    OOM  |    96.67  | 125.70 |  227.82    |
-|        int8      |   97.92 |   155.03  | 162.58 |  279.35    |
+|baseline(bfloat16)|    OOM  |    96.67  | 155.35 |  227.82    |
+|        int8      |   97.92 |   155.03  | 216.87 |  279.35    |
 
 
 ## Generate Text
