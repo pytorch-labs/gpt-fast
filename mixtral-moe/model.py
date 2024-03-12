@@ -188,16 +188,16 @@ class ConditionalFeedForward(nn.Module):
     def __init__(self, config):
         super().__init__()
         self.w1 = nn.Parameter(torch.empty(config.num_experts, config.intermediate_size, config.dim))
-        self.w2 = nn.Parameter(torch.empty(config.num_experts, config.intermediate_size, config.dim))
+        self.w2 = nn.Parameter(torch.empty(config.num_experts, config.dim, config.intermediate_size))
         self.w3 = nn.Parameter(torch.empty(config.num_experts, config.intermediate_size, config.dim))
 
     def forward(self, x: Tensor, expert_indices: Tensor) -> Tensor:
-        w1_weights = self.w1[expert_indices].transpose(-1, -2) # [T, A, D, D]
-        w3_weights = self.w3[expert_indices].transpose(-1, -2) # [T, A, D, D]
+        w1_weights = self.w1[expert_indices] # [T, A, D, D]
+        w3_weights = self.w3[expert_indices] # [T, A, D, D]
         w2_weights = self.w2[expert_indices]  # [T, A, D, D]
-        x1 = F.silu(torch.einsum('ti,taio -> tao', x, w1_weights))
-        x3 = torch.einsum('ti, taio -> tao', x, w3_weights)
-        expert_outs =  torch.einsum('tao, taoi -> tai', (x1 * x3), w2_weights)
+        x1 = F.silu(torch.einsum('ti,taoi -> tao', x, w1_weights))
+        x3 = torch.einsum('ti, taoi -> tao', x, w3_weights)
+        expert_outs =  torch.einsum('tao, taio -> tai', (x1 * x3), w2_weights)
         return expert_outs
 
 

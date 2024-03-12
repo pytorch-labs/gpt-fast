@@ -76,9 +76,11 @@ def convert_hf_checkpoint(
             del final_result[key]
             del final_result[key.replace("wq", "wk")]
             del final_result[key.replace("wq", "wv")]
-        if "w1" in key or "w2" in key or "w3" in key:
+        elif "w1" in key or "w3" in key:
             final_result[key] = final_result[key].reshape(config.num_experts, config.intermediate_size, config.dim).contiguous()
-        if "gate" in key:
+        elif "w2" in key:
+            final_result[key] = final_result[key].reshape(config.num_experts, config.intermediate_size, config.dim).permute(0, 2, 1).contiguous()
+        elif "gate" in key:
             final_result[key] = final_result[key].contiguous()
 
     print(f"Saving checkpoint to {checkpoint_dir / 'model.pth'}")
