@@ -16,7 +16,7 @@ import torch._inductor.config
 def device_sync(device):
     if "cuda" in device:
         torch.cuda.synchronize(device)
-    elif "cpu" in device:
+    elif ("cpu" in device) or ("mps" in device):
         pass
     else:
         print(f"device={device} is not yet suppported")
