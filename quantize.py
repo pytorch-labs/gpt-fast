@@ -19,6 +19,8 @@ except:
 
 from model import Transformer
 
+default_device = 'cuda' if torch.cuda.is_available() else 'cpu'
+
 ##### Quantization Primitives ######
 
 def dynamically_quantize_per_channel(x, quant_min, quant_max, target_dtype):
@@ -539,7 +541,7 @@ def quantize(
     percdamp: float = .01,
     blocksize: int = 128,
     label: str = '',
-    device: str = 'cuda',
+    device: str = default_device,
 ) -> None:
     assert checkpoint_path.is_file(), checkpoint_path
 
@@ -619,7 +621,7 @@ if __name__ == '__main__':
     parser.add_argument('--percdamp', type=float, default=.01, help='gptq percentage dampening')
     parser.add_argument('--blocksize', type=int, default=128, help='blocksize for gptq')
     parser.add_argument('--label', type=str, default='_', help='label to add to output filename')
-    parser.add_argument('--device', type=str, default=('cuda' if torch.cuda.is_available() else 'cpu'), help='device to use')
+    parser.add_argument('--device', type=str, default=default_device, help='device to use')
 
     args = parser.parse_args()
     quantize(args.checkpoint_path, args.mode, args.groupsize, args.calibration_tasks, args.calibration_limit, args.calibration_seq_length, args.pad_calibration_inputs, args.percdamp, args.blocksize, args.label, args.device)
