@@ -259,7 +259,7 @@ def main(
     profile: Optional[Path] = None,
     draft_checkpoint_path: Optional[Path] = None,
     speculate_k: int = 5,
-    device='cuda',
+    device=('cuda' if torch.cuda.is_available() else 'cpu'),
 ) -> None:
     """Generates text samples based on a pre-trained Transformer model and tokenizer.
     """
@@ -414,7 +414,7 @@ if __name__ == '__main__':
     parser.add_argument('--profile', type=Path, default=None, help='Profile path.')
     parser.add_argument('--speculate_k', type=int, default=5, help='Speculative execution depth.')
     parser.add_argument('--draft_checkpoint_path', type=Path, default=None, help='Draft checkpoint path.')
-    parser.add_argument('--device', type=str, default="cuda", help='Device to use')
+    parser.add_argument('--device', type=str, default=('cuda' if torch.cuda.is_available() else 'cpu'), help='Device to use')
 
     args = parser.parse_args()
     main(
