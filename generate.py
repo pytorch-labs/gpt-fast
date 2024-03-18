@@ -235,6 +235,8 @@ def _load_model(checkpoint_path, device, precision, use_tp):
         model = simple_quantizer.convert_for_runtime(use_cuda)
 
     checkpoint = torch.load(str(checkpoint_path), mmap=True, weights_only=True)
+    if "model" in checkpoint and "stories" in str(checkpoint_path):
+        checkpoint = checkpoint["model"]
     model.load_state_dict(checkpoint, assign=True)
 
     if use_tp:
