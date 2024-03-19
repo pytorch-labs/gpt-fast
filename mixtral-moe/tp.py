@@ -28,7 +28,7 @@ def local_break():
 def _get_world_size() -> int:
     return int(os.environ.get("LOCAL_WORLD_SIZE", "1"))
 
-def maybe_init_dist() -> Optional[int]:
+def maybe_init_dist(device) -> Optional[int]:
     try:
         # provided by torchrun
         rank = _get_rank()
@@ -41,8 +41,21 @@ def maybe_init_dist() -> Optional[int]:
         # not run via torchrun, no-op
         return None
 
-    torch.cuda.set_device(rank)
-    dist.init_process_group(backend="nccl", rank=rank, world_size=world_size)
+    if "cuda" in device:
+        torch.cuda.set_device(rank)
+        dist.init_process_group(backend="nccl", rank=rank, world_size=world_size)
+    elif "xpu" in device:
+        try:
+            import oneccl_bindings_for_pytorch
+        except:
+            raise ModuleNotFoundError(f"OneCCL bindings for PyTorch (oneccl_bindings_for_pytorch) is required to run tensor parallel on Intel GPU (XPU). Please check https://github.com/intel/torch-ccl for details.")
+
+        os.environ['CCL_PROCESS_LAUNCHER'] = 'none'
+        os.environ['CCL_LOCAL_SIZE'] = str(world_size)
+        os.environ['CCL_LOCAL_RANK'] = str(rank)
+
+        torch.xpu.set_device(rank)
+        dist.init_process_group(backend="ccl", rank=rank, world_size=world_size)
     return rank
 
 rank = _get_rank()
