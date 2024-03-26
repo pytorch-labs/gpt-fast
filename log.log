@@ -1,0 +1,477 @@
+2024-03-25:17:50:41,903 INFO     [utils.py:145] Note: detected 192 virtual cores but NumExpr set to maximum of 64, check "NUMEXPR_MAX_THREADS" environment variable.
+2024-03-25:17:50:41,904 INFO     [utils.py:148] Note: NumExpr detected 192 cores but "NUMEXPR_MAX_THREADS" not set, so enforcing safe limit of 8.
+2024-03-25:17:50:41,904 INFO     [utils.py:160] NumExpr defaulting to 8 threads.
+/home/cdhernandez/local/miniconda3/envs/pytorch/lib/python3.10/site-packages/pandas/core/arrays/masked.py:60: UserWarning: Pandas requires version '1.3.6' or newer of 'bottleneck' (version '1.3.5' currently installed).
+  from pandas.core import (
+2024-03-25:17:50:49,270 INFO     [huggingface.py:148] Using device 'cuda'
+2024-03-25:17:50:54,575 WARNING  [__init__.py:194] Some tasks could not be loaded due to missing dependencies. Run with `--verbosity DEBUG` for full details.
+2024-03-25:17:50:58,714 WARNING  [__init__.py:194] Some tasks could not be loaded due to missing dependencies. Run with `--verbosity DEBUG` for full details.
+2024-03-25:17:50:58,714 WARNING  [task.py:626] [Task: wikitext] metric word_perplexity is defined, but aggregation is not. using default aggregation=weighted_perplexity
+2024-03-25:17:50:58,714 WARNING  [task.py:638] [Task: wikitext] metric word_perplexity is defined, but higher_is_better is not. using default higher_is_better=False
+2024-03-25:17:50:58,715 WARNING  [task.py:626] [Task: wikitext] metric byte_perplexity is defined, but aggregation is not. using default aggregation=weighted_perplexity
+2024-03-25:17:50:58,715 WARNING  [task.py:638] [Task: wikitext] metric byte_perplexity is defined, but higher_is_better is not. using default higher_is_better=False
+2024-03-25:17:50:58,715 WARNING  [task.py:626] [Task: wikitext] metric bits_per_byte is defined, but aggregation is not. using default aggregation=bits_per_byte
+2024-03-25:17:50:58,715 WARNING  [task.py:638] [Task: wikitext] metric bits_per_byte is defined, but higher_is_better is not. using default higher_is_better=False
+Repo card metadata block was not found. Setting CardData to empty.
+2024-03-25:17:50:59,420 WARNING  [repocard.py:107] Repo card metadata block was not found. Setting CardData to empty.
+2024-03-25:17:50:59,466 INFO     [task.py:363] Building contexts for task on rank 0...
+2024-03-25:17:50:59,475 INFO     [evaluator.py:324] Running loglikelihood_rolling requests
+Loading model ...
+Using int4 weight-only quantization!
+Time to load model: 3.75 seconds.
+  0%|          | 0/5 [00:00<?, ?it/s] 20%|██        | 1/5 [00:01<00:05,  1.26s/it] 40%|████      | 2/5 [00:06<00:09,  3.32s/it] 60%|██████    | 3/5 [00:09<00:06,  3.26s/it] 80%|████████  | 4/5 [00:17<00:05,  5.10s/it]100%|██████████| 5/5 [00:20<00:00,  4.40s/it]100%|██████████| 5/5 [00:20<00:00,  4.06s/it]
+Time to run eval: 30.53 seconds.
+For model checkpoints/meta-llama/Llama-2-7b-chat-hf/model_int4-gptq.g32.cuda.pth
+wikitext: {'word_perplexity,none': 11.232339081135366, 'word_perplexity_stderr,none': 'N/A', 'byte_perplexity,none': 1.6038800882234914, 'byte_perplexity_stderr,none': 'N/A', 'bits_per_byte,none': 0.6815662848152432, 'bits_per_byte_stderr,none': 'N/A', 'alias': 'wikitext'}
+2024-03-25:17:51:25,668 INFO     [utils.py:145] Note: detected 192 virtual cores but NumExpr set to maximum of 64, check "NUMEXPR_MAX_THREADS" environment variable.
+2024-03-25:17:51:25,668 INFO     [utils.py:148] Note: NumExpr detected 192 cores but "NUMEXPR_MAX_THREADS" not set, so enforcing safe limit of 8.
+2024-03-25:17:51:25,668 INFO     [utils.py:160] NumExpr defaulting to 8 threads.
+/home/cdhernandez/local/miniconda3/envs/pytorch/lib/python3.10/site-packages/pandas/core/arrays/masked.py:60: UserWarning: Pandas requires version '1.3.6' or newer of 'bottleneck' (version '1.3.5' currently installed).
+  from pandas.core import (
+Loading model ...
+Quantizing model weights for int4 weight-only affine per-channel groupwise quantization
+Prepacking model weights in cuda optimal layout
+linear: layers.0.attention.wqkv, in=4096, out=12288
+linear: layers.0.attention.wo, in=4096, out=4096
+linear: layers.0.feed_forward.w1, in=4096, out=11008
+linear: layers.0.feed_forward.w3, in=4096, out=11008
+linear: layers.0.feed_forward.w2, in=11008, out=4096
+linear: layers.1.attention.wqkv, in=4096, out=12288
+linear: layers.1.attention.wo, in=4096, out=4096
+linear: layers.1.feed_forward.w1, in=4096, out=11008
+linear: layers.1.feed_forward.w3, in=4096, out=11008
+linear: layers.1.feed_forward.w2, in=11008, out=4096
+linear: layers.2.attention.wqkv, in=4096, out=12288
+linear: layers.2.attention.wo, in=4096, out=4096
+linear: layers.2.feed_forward.w1, in=4096, out=11008
+linear: layers.2.feed_forward.w3, in=4096, out=11008
+linear: layers.2.feed_forward.w2, in=11008, out=4096
+linear: layers.3.attention.wqkv, in=4096, out=12288
+linear: layers.3.attention.wo, in=4096, out=4096
+linear: layers.3.feed_forward.w1, in=4096, out=11008
+linear: layers.3.feed_forward.w3, in=4096, out=11008
+linear: layers.3.feed_forward.w2, in=11008, out=4096
+linear: layers.4.attention.wqkv, in=4096, out=12288
+linear: layers.4.attention.wo, in=4096, out=4096
+linear: layers.4.feed_forward.w1, in=4096, out=11008
+linear: layers.4.feed_forward.w3, in=4096, out=11008
+linear: layers.4.feed_forward.w2, in=11008, out=4096
+linear: layers.5.attention.wqkv, in=4096, out=12288
+linear: layers.5.attention.wo, in=4096, out=4096
+linear: layers.5.feed_forward.w1, in=4096, out=11008
+linear: layers.5.feed_forward.w3, in=4096, out=11008
+linear: layers.5.feed_forward.w2, in=11008, out=4096
+linear: layers.6.attention.wqkv, in=4096, out=12288
+linear: layers.6.attention.wo, in=4096, out=4096
+linear: layers.6.feed_forward.w1, in=4096, out=11008
+linear: layers.6.feed_forward.w3, in=4096, out=11008
+linear: layers.6.feed_forward.w2, in=11008, out=4096
+linear: layers.7.attention.wqkv, in=4096, out=12288
+linear: layers.7.attention.wo, in=4096, out=4096
+linear: layers.7.feed_forward.w1, in=4096, out=11008
+linear: layers.7.feed_forward.w3, in=4096, out=11008
+linear: layers.7.feed_forward.w2, in=11008, out=4096
+linear: layers.8.attention.wqkv, in=4096, out=12288
+linear: layers.8.attention.wo, in=4096, out=4096
+linear: layers.8.feed_forward.w1, in=4096, out=11008
+linear: layers.8.feed_forward.w3, in=4096, out=11008
+linear: layers.8.feed_forward.w2, in=11008, out=4096
+linear: layers.9.attention.wqkv, in=4096, out=12288
+linear: layers.9.attention.wo, in=4096, out=4096
+linear: layers.9.feed_forward.w1, in=4096, out=11008
+linear: layers.9.feed_forward.w3, in=4096, out=11008
+linear: layers.9.feed_forward.w2, in=11008, out=4096
+linear: layers.10.attention.wqkv, in=4096, out=12288
+linear: layers.10.attention.wo, in=4096, out=4096
+linear: layers.10.feed_forward.w1, in=4096, out=11008
+linear: layers.10.feed_forward.w3, in=4096, out=11008
+linear: layers.10.feed_forward.w2, in=11008, out=4096
+linear: layers.11.attention.wqkv, in=4096, out=12288
+linear: layers.11.attention.wo, in=4096, out=4096
+linear: layers.11.feed_forward.w1, in=4096, out=11008
+linear: layers.11.feed_forward.w3, in=4096, out=11008
+linear: layers.11.feed_forward.w2, in=11008, out=4096
+linear: layers.12.attention.wqkv, in=4096, out=12288
+linear: layers.12.attention.wo, in=4096, out=4096
+linear: layers.12.feed_forward.w1, in=4096, out=11008
+linear: layers.12.feed_forward.w3, in=4096, out=11008
+linear: layers.12.feed_forward.w2, in=11008, out=4096
+linear: layers.13.attention.wqkv, in=4096, out=12288
+linear: layers.13.attention.wo, in=4096, out=4096
+linear: layers.13.feed_forward.w1, in=4096, out=11008
+linear: layers.13.feed_forward.w3, in=4096, out=11008
+linear: layers.13.feed_forward.w2, in=11008, out=4096
+linear: layers.14.attention.wqkv, in=4096, out=12288
+linear: layers.14.attention.wo, in=4096, out=4096
+linear: layers.14.feed_forward.w1, in=4096, out=11008
+linear: layers.14.feed_forward.w3, in=4096, out=11008
+linear: layers.14.feed_forward.w2, in=11008, out=4096
+linear: layers.15.attention.wqkv, in=4096, out=12288
+linear: layers.15.attention.wo, in=4096, out=4096
+linear: layers.15.feed_forward.w1, in=4096, out=11008
+linear: layers.15.feed_forward.w3, in=4096, out=11008
+linear: layers.15.feed_forward.w2, in=11008, out=4096
+linear: layers.16.attention.wqkv, in=4096, out=12288
+linear: layers.16.attention.wo, in=4096, out=4096
+linear: layers.16.feed_forward.w1, in=4096, out=11008
+linear: layers.16.feed_forward.w3, in=4096, out=11008
+linear: layers.16.feed_forward.w2, in=11008, out=4096
+linear: layers.17.attention.wqkv, in=4096, out=12288
+linear: layers.17.attention.wo, in=4096, out=4096
+linear: layers.17.feed_forward.w1, in=4096, out=11008
+linear: layers.17.feed_forward.w3, in=4096, out=11008
+linear: layers.17.feed_forward.w2, in=11008, out=4096
+linear: layers.18.attention.wqkv, in=4096, out=12288
+linear: layers.18.attention.wo, in=4096, out=4096
+linear: layers.18.feed_forward.w1, in=4096, out=11008
+linear: layers.18.feed_forward.w3, in=4096, out=11008
+linear: layers.18.feed_forward.w2, in=11008, out=4096
+linear: layers.19.attention.wqkv, in=4096, out=12288
+linear: layers.19.attention.wo, in=4096, out=4096
+linear: layers.19.feed_forward.w1, in=4096, out=11008
+linear: layers.19.feed_forward.w3, in=4096, out=11008
+linear: layers.19.feed_forward.w2, in=11008, out=4096
+linear: layers.20.attention.wqkv, in=4096, out=12288
+linear: layers.20.attention.wo, in=4096, out=4096
+linear: layers.20.feed_forward.w1, in=4096, out=11008
+linear: layers.20.feed_forward.w3, in=4096, out=11008
+linear: layers.20.feed_forward.w2, in=11008, out=4096
+linear: layers.21.attention.wqkv, in=4096, out=12288
+linear: layers.21.attention.wo, in=4096, out=4096
+linear: layers.21.feed_forward.w1, in=4096, out=11008
+linear: layers.21.feed_forward.w3, in=4096, out=11008
+linear: layers.21.feed_forward.w2, in=11008, out=4096
+linear: layers.22.attention.wqkv, in=4096, out=12288
+linear: layers.22.attention.wo, in=4096, out=4096
+linear: layers.22.feed_forward.w1, in=4096, out=11008
+linear: layers.22.feed_forward.w3, in=4096, out=11008
+linear: layers.22.feed_forward.w2, in=11008, out=4096
+linear: layers.23.attention.wqkv, in=4096, out=12288
+linear: layers.23.attention.wo, in=4096, out=4096
+linear: layers.23.feed_forward.w1, in=4096, out=11008
+linear: layers.23.feed_forward.w3, in=4096, out=11008
+linear: layers.23.feed_forward.w2, in=11008, out=4096
+linear: layers.24.attention.wqkv, in=4096, out=12288
+linear: layers.24.attention.wo, in=4096, out=4096
+linear: layers.24.feed_forward.w1, in=4096, out=11008
+linear: layers.24.feed_forward.w3, in=4096, out=11008
+linear: layers.24.feed_forward.w2, in=11008, out=4096
+linear: layers.25.attention.wqkv, in=4096, out=12288
+linear: layers.25.attention.wo, in=4096, out=4096
+linear: layers.25.feed_forward.w1, in=4096, out=11008
+linear: layers.25.feed_forward.w3, in=4096, out=11008
+linear: layers.25.feed_forward.w2, in=11008, out=4096
+linear: layers.26.attention.wqkv, in=4096, out=12288
+linear: layers.26.attention.wo, in=4096, out=4096
+linear: layers.26.feed_forward.w1, in=4096, out=11008
+linear: layers.26.feed_forward.w3, in=4096, out=11008
+linear: layers.26.feed_forward.w2, in=11008, out=4096
+linear: layers.27.attention.wqkv, in=4096, out=12288
+linear: layers.27.attention.wo, in=4096, out=4096
+linear: layers.27.feed_forward.w1, in=4096, out=11008
+linear: layers.27.feed_forward.w3, in=4096, out=11008
+linear: layers.27.feed_forward.w2, in=11008, out=4096
+linear: layers.28.attention.wqkv, in=4096, out=12288
+linear: layers.28.attention.wo, in=4096, out=4096
+linear: layers.28.feed_forward.w1, in=4096, out=11008
+linear: layers.28.feed_forward.w3, in=4096, out=11008
+linear: layers.28.feed_forward.w2, in=11008, out=4096
+linear: layers.29.attention.wqkv, in=4096, out=12288
+linear: layers.29.attention.wo, in=4096, out=4096
+linear: layers.29.feed_forward.w1, in=4096, out=11008
+linear: layers.29.feed_forward.w3, in=4096, out=11008
+linear: layers.29.feed_forward.w2, in=11008, out=4096
+linear: layers.30.attention.wqkv, in=4096, out=12288
+linear: layers.30.attention.wo, in=4096, out=4096
+linear: layers.30.feed_forward.w1, in=4096, out=11008
+linear: layers.30.feed_forward.w3, in=4096, out=11008
+linear: layers.30.feed_forward.w2, in=11008, out=4096
+linear: layers.31.attention.wqkv, in=4096, out=12288
+linear: layers.31.attention.wo, in=4096, out=4096
+linear: layers.31.feed_forward.w1, in=4096, out=11008
+linear: layers.31.feed_forward.w3, in=4096, out=11008
+linear: layers.31.feed_forward.w2, in=11008, out=4096
+linear: output, in=4096, out=32000
+Writing quantized weights to checkpoints/meta-llama/Llama-2-7b-chat-hf/model_int4.g32.cuda.pth
+Quantization complete took 18.33 seconds
+2024-03-25:17:51:53,532 INFO     [utils.py:145] Note: detected 192 virtual cores but NumExpr set to maximum of 64, check "NUMEXPR_MAX_THREADS" environment variable.
+2024-03-25:17:51:53,532 INFO     [utils.py:148] Note: NumExpr detected 192 cores but "NUMEXPR_MAX_THREADS" not set, so enforcing safe limit of 8.
+2024-03-25:17:51:53,532 INFO     [utils.py:160] NumExpr defaulting to 8 threads.
+/home/cdhernandez/local/miniconda3/envs/pytorch/lib/python3.10/site-packages/pandas/core/arrays/masked.py:60: UserWarning: Pandas requires version '1.3.6' or newer of 'bottleneck' (version '1.3.5' currently installed).
+  from pandas.core import (
+Loading model ...
+Using int4 weight-only quantization!
+Traceback (most recent call last):
+  File "/home/cdhernandez/local/gpt-fast/eval.py", line 268, in <module>
+    main(
+  File "/home/cdhernandez/local/gpt-fast/eval.py", line 227, in main
+    model = _load_model(checkpoint_path, device, precision, False)
+  File "/home/cdhernandez/local/gpt-fast/generate.py", line 240, in _load_model
+    model.load_state_dict(checkpoint, assign=True)
+  File "/home/cdhernandez/local/pytorch/torch/nn/modules/module.py", line 2184, in load_state_dict
+    raise RuntimeError('Error(s) in loading state_dict for {}:\n\t{}'.format(
+RuntimeError: Error(s) in loading state_dict for Transformer:
+	size mismatch for layers.0.feed_forward.w2.weight: copying a param with shape torch.Size([512, 86, 32, 4]) from checkpoint, the shape in current model is torch.Size([512, 88, 32, 4]).
+	size mismatch for layers.0.feed_forward.w2.scales_and_zeros: copying a param with shape torch.Size([344, 4096, 2]) from checkpoint, the shape in current model is torch.Size([352, 4096, 2]).
+	size mismatch for layers.1.feed_forward.w2.weight: copying a param with shape torch.Size([512, 86, 32, 4]) from checkpoint, the shape in current model is torch.Size([512, 88, 32, 4]).
+	size mismatch for layers.1.feed_forward.w2.scales_and_zeros: copying a param with shape torch.Size([344, 4096, 2]) from checkpoint, the shape in current model is torch.Size([352, 4096, 2]).
+	size mismatch for layers.2.feed_forward.w2.weight: copying a param with shape torch.Size([512, 86, 32, 4]) from checkpoint, the shape in current model is torch.Size([512, 88, 32, 4]).
+	size mismatch for layers.2.feed_forward.w2.scales_and_zeros: copying a param with shape torch.Size([344, 4096, 2]) from checkpoint, the shape in current model is torch.Size([352, 4096, 2]).
+	size mismatch for layers.3.feed_forward.w2.weight: copying a param with shape torch.Size([512, 86, 32, 4]) from checkpoint, the shape in current model is torch.Size([512, 88, 32, 4]).
+	size mismatch for layers.3.feed_forward.w2.scales_and_zeros: copying a param with shape torch.Size([344, 4096, 2]) from checkpoint, the shape in current model is torch.Size([352, 4096, 2]).
+	size mismatch for layers.4.feed_forward.w2.weight: copying a param with shape torch.Size([512, 86, 32, 4]) from checkpoint, the shape in current model is torch.Size([512, 88, 32, 4]).
+	size mismatch for layers.4.feed_forward.w2.scales_and_zeros: copying a param with shape torch.Size([344, 4096, 2]) from checkpoint, the shape in current model is torch.Size([352, 4096, 2]).
+	size mismatch for layers.5.feed_forward.w2.weight: copying a param with shape torch.Size([512, 86, 32, 4]) from checkpoint, the shape in current model is torch.Size([512, 88, 32, 4]).
+	size mismatch for layers.5.feed_forward.w2.scales_and_zeros: copying a param with shape torch.Size([344, 4096, 2]) from checkpoint, the shape in current model is torch.Size([352, 4096, 2]).
+	size mismatch for layers.6.feed_forward.w2.weight: copying a param with shape torch.Size([512, 86, 32, 4]) from checkpoint, the shape in current model is torch.Size([512, 88, 32, 4]).
+	size mismatch for layers.6.feed_forward.w2.scales_and_zeros: copying a param with shape torch.Size([344, 4096, 2]) from checkpoint, the shape in current model is torch.Size([352, 4096, 2]).
+	size mismatch for layers.7.feed_forward.w2.weight: copying a param with shape torch.Size([512, 86, 32, 4]) from checkpoint, the shape in current model is torch.Size([512, 88, 32, 4]).
+	size mismatch for layers.7.feed_forward.w2.scales_and_zeros: copying a param with shape torch.Size([344, 4096, 2]) from checkpoint, the shape in current model is torch.Size([352, 4096, 2]).
+	size mismatch for layers.8.feed_forward.w2.weight: copying a param with shape torch.Size([512, 86, 32, 4]) from checkpoint, the shape in current model is torch.Size([512, 88, 32, 4]).
+	size mismatch for layers.8.feed_forward.w2.scales_and_zeros: copying a param with shape torch.Size([344, 4096, 2]) from checkpoint, the shape in current model is torch.Size([352, 4096, 2]).
+	size mismatch for layers.9.feed_forward.w2.weight: copying a param with shape torch.Size([512, 86, 32, 4]) from checkpoint, the shape in current model is torch.Size([512, 88, 32, 4]).
+	size mismatch for layers.9.feed_forward.w2.scales_and_zeros: copying a param with shape torch.Size([344, 4096, 2]) from checkpoint, the shape in current model is torch.Size([352, 4096, 2]).
+	size mismatch for layers.10.feed_forward.w2.weight: copying a param with shape torch.Size([512, 86, 32, 4]) from checkpoint, the shape in current model is torch.Size([512, 88, 32, 4]).
+	size mismatch for layers.10.feed_forward.w2.scales_and_zeros: copying a param with shape torch.Size([344, 4096, 2]) from checkpoint, the shape in current model is torch.Size([352, 4096, 2]).
+	size mismatch for layers.11.feed_forward.w2.weight: copying a param with shape torch.Size([512, 86, 32, 4]) from checkpoint, the shape in current model is torch.Size([512, 88, 32, 4]).
+	size mismatch for layers.11.feed_forward.w2.scales_and_zeros: copying a param with shape torch.Size([344, 4096, 2]) from checkpoint, the shape in current model is torch.Size([352, 4096, 2]).
+	size mismatch for layers.12.feed_forward.w2.weight: copying a param with shape torch.Size([512, 86, 32, 4]) from checkpoint, the shape in current model is torch.Size([512, 88, 32, 4]).
+	size mismatch for layers.12.feed_forward.w2.scales_and_zeros: copying a param with shape torch.Size([344, 4096, 2]) from checkpoint, the shape in current model is torch.Size([352, 4096, 2]).
+	size mismatch for layers.13.feed_forward.w2.weight: copying a param with shape torch.Size([512, 86, 32, 4]) from checkpoint, the shape in current model is torch.Size([512, 88, 32, 4]).
+	size mismatch for layers.13.feed_forward.w2.scales_and_zeros: copying a param with shape torch.Size([344, 4096, 2]) from checkpoint, the shape in current model is torch.Size([352, 4096, 2]).
+	size mismatch for layers.14.feed_forward.w2.weight: copying a param with shape torch.Size([512, 86, 32, 4]) from checkpoint, the shape in current model is torch.Size([512, 88, 32, 4]).
+	size mismatch for layers.14.feed_forward.w2.scales_and_zeros: copying a param with shape torch.Size([344, 4096, 2]) from checkpoint, the shape in current model is torch.Size([352, 4096, 2]).
+	size mismatch for layers.15.feed_forward.w2.weight: copying a param with shape torch.Size([512, 86, 32, 4]) from checkpoint, the shape in current model is torch.Size([512, 88, 32, 4]).
+	size mismatch for layers.15.feed_forward.w2.scales_and_zeros: copying a param with shape torch.Size([344, 4096, 2]) from checkpoint, the shape in current model is torch.Size([352, 4096, 2]).
+	size mismatch for layers.16.feed_forward.w2.weight: copying a param with shape torch.Size([512, 86, 32, 4]) from checkpoint, the shape in current model is torch.Size([512, 88, 32, 4]).
+	size mismatch for layers.16.feed_forward.w2.scales_and_zeros: copying a param with shape torch.Size([344, 4096, 2]) from checkpoint, the shape in current model is torch.Size([352, 4096, 2]).
+	size mismatch for layers.17.feed_forward.w2.weight: copying a param with shape torch.Size([512, 86, 32, 4]) from checkpoint, the shape in current model is torch.Size([512, 88, 32, 4]).
+	size mismatch for layers.17.feed_forward.w2.scales_and_zeros: copying a param with shape torch.Size([344, 4096, 2]) from checkpoint, the shape in current model is torch.Size([352, 4096, 2]).
+	size mismatch for layers.18.feed_forward.w2.weight: copying a param with shape torch.Size([512, 86, 32, 4]) from checkpoint, the shape in current model is torch.Size([512, 88, 32, 4]).
+	size mismatch for layers.18.feed_forward.w2.scales_and_zeros: copying a param with shape torch.Size([344, 4096, 2]) from checkpoint, the shape in current model is torch.Size([352, 4096, 2]).
+	size mismatch for layers.19.feed_forward.w2.weight: copying a param with shape torch.Size([512, 86, 32, 4]) from checkpoint, the shape in current model is torch.Size([512, 88, 32, 4]).
+	size mismatch for layers.19.feed_forward.w2.scales_and_zeros: copying a param with shape torch.Size([344, 4096, 2]) from checkpoint, the shape in current model is torch.Size([352, 4096, 2]).
+	size mismatch for layers.20.feed_forward.w2.weight: copying a param with shape torch.Size([512, 86, 32, 4]) from checkpoint, the shape in current model is torch.Size([512, 88, 32, 4]).
+	size mismatch for layers.20.feed_forward.w2.scales_and_zeros: copying a param with shape torch.Size([344, 4096, 2]) from checkpoint, the shape in current model is torch.Size([352, 4096, 2]).
+	size mismatch for layers.21.feed_forward.w2.weight: copying a param with shape torch.Size([512, 86, 32, 4]) from checkpoint, the shape in current model is torch.Size([512, 88, 32, 4]).
+	size mismatch for layers.21.feed_forward.w2.scales_and_zeros: copying a param with shape torch.Size([344, 4096, 2]) from checkpoint, the shape in current model is torch.Size([352, 4096, 2]).
+	size mismatch for layers.22.feed_forward.w2.weight: copying a param with shape torch.Size([512, 86, 32, 4]) from checkpoint, the shape in current model is torch.Size([512, 88, 32, 4]).
+	size mismatch for layers.22.feed_forward.w2.scales_and_zeros: copying a param with shape torch.Size([344, 4096, 2]) from checkpoint, the shape in current model is torch.Size([352, 4096, 2]).
+	size mismatch for layers.23.feed_forward.w2.weight: copying a param with shape torch.Size([512, 86, 32, 4]) from checkpoint, the shape in current model is torch.Size([512, 88, 32, 4]).
+	size mismatch for layers.23.feed_forward.w2.scales_and_zeros: copying a param with shape torch.Size([344, 4096, 2]) from checkpoint, the shape in current model is torch.Size([352, 4096, 2]).
+	size mismatch for layers.24.feed_forward.w2.weight: copying a param with shape torch.Size([512, 86, 32, 4]) from checkpoint, the shape in current model is torch.Size([512, 88, 32, 4]).
+	size mismatch for layers.24.feed_forward.w2.scales_and_zeros: copying a param with shape torch.Size([344, 4096, 2]) from checkpoint, the shape in current model is torch.Size([352, 4096, 2]).
+	size mismatch for layers.25.feed_forward.w2.weight: copying a param with shape torch.Size([512, 86, 32, 4]) from checkpoint, the shape in current model is torch.Size([512, 88, 32, 4]).
+	size mismatch for layers.25.feed_forward.w2.scales_and_zeros: copying a param with shape torch.Size([344, 4096, 2]) from checkpoint, the shape in current model is torch.Size([352, 4096, 2]).
+	size mismatch for layers.26.feed_forward.w2.weight: copying a param with shape torch.Size([512, 86, 32, 4]) from checkpoint, the shape in current model is torch.Size([512, 88, 32, 4]).
+	size mismatch for layers.26.feed_forward.w2.scales_and_zeros: copying a param with shape torch.Size([344, 4096, 2]) from checkpoint, the shape in current model is torch.Size([352, 4096, 2]).
+	size mismatch for layers.27.feed_forward.w2.weight: copying a param with shape torch.Size([512, 86, 32, 4]) from checkpoint, the shape in current model is torch.Size([512, 88, 32, 4]).
+	size mismatch for layers.27.feed_forward.w2.scales_and_zeros: copying a param with shape torch.Size([344, 4096, 2]) from checkpoint, the shape in current model is torch.Size([352, 4096, 2]).
+	size mismatch for layers.28.feed_forward.w2.weight: copying a param with shape torch.Size([512, 86, 32, 4]) from checkpoint, the shape in current model is torch.Size([512, 88, 32, 4]).
+	size mismatch for layers.28.feed_forward.w2.scales_and_zeros: copying a param with shape torch.Size([344, 4096, 2]) from checkpoint, the shape in current model is torch.Size([352, 4096, 2]).
+	size mismatch for layers.29.feed_forward.w2.weight: copying a param with shape torch.Size([512, 86, 32, 4]) from checkpoint, the shape in current model is torch.Size([512, 88, 32, 4]).
+	size mismatch for layers.29.feed_forward.w2.scales_and_zeros: copying a param with shape torch.Size([344, 4096, 2]) from checkpoint, the shape in current model is torch.Size([352, 4096, 2]).
+	size mismatch for layers.30.feed_forward.w2.weight: copying a param with shape torch.Size([512, 86, 32, 4]) from checkpoint, the shape in current model is torch.Size([512, 88, 32, 4]).
+	size mismatch for layers.30.feed_forward.w2.scales_and_zeros: copying a param with shape torch.Size([344, 4096, 2]) from checkpoint, the shape in current model is torch.Size([352, 4096, 2]).
+	size mismatch for layers.31.feed_forward.w2.weight: copying a param with shape torch.Size([512, 86, 32, 4]) from checkpoint, the shape in current model is torch.Size([512, 88, 32, 4]).
+	size mismatch for layers.31.feed_forward.w2.scales_and_zeros: copying a param with shape torch.Size([344, 4096, 2]) from checkpoint, the shape in current model is torch.Size([352, 4096, 2]).
+W0325 17:52:01.365000 140417423238144 torch/distributed/run.py:757] 
+W0325 17:52:01.365000 140417423238144 torch/distributed/run.py:757] *****************************************
+W0325 17:52:01.365000 140417423238144 torch/distributed/run.py:757] Setting OMP_NUM_THREADS environment variable for each process to be 1 in default, to avoid your system being overloaded, please further tune the variable for optimal performance in your application as needed. 
+W0325 17:52:01.365000 140417423238144 torch/distributed/run.py:757] *****************************************
+2024-03-25:17:52:08,088 INFO     [utils.py:145] Note: detected 192 virtual cores but NumExpr set to maximum of 64, check "NUMEXPR_MAX_THREADS" environment variable.
+2024-03-25:17:52:08,088 INFO     [utils.py:148] Note: NumExpr detected 192 cores but "NUMEXPR_MAX_THREADS" not set, so enforcing safe limit of 8.
+/home/cdhernandez/local/miniconda3/envs/pytorch/lib/python3.10/site-packages/pandas/core/arrays/masked.py:60: UserWarning: Pandas requires version '1.3.6' or newer of 'bottleneck' (version '1.3.5' currently installed).
+  from pandas.core import (
+2024-03-25:17:52:08,258 INFO     [utils.py:145] Note: detected 192 virtual cores but NumExpr set to maximum of 64, check "NUMEXPR_MAX_THREADS" environment variable.
+2024-03-25:17:52:08,258 INFO     [utils.py:148] Note: NumExpr detected 192 cores but "NUMEXPR_MAX_THREADS" not set, so enforcing safe limit of 8.
+/home/cdhernandez/local/miniconda3/envs/pytorch/lib/python3.10/site-packages/pandas/core/arrays/masked.py:60: UserWarning: Pandas requires version '1.3.6' or newer of 'bottleneck' (version '1.3.5' currently installed).
+  from pandas.core import (
+2024-03-25:17:52:08,311 INFO     [utils.py:145] Note: detected 192 virtual cores but NumExpr set to maximum of 64, check "NUMEXPR_MAX_THREADS" environment variable.
+2024-03-25:17:52:08,311 INFO     [utils.py:148] Note: NumExpr detected 192 cores but "NUMEXPR_MAX_THREADS" not set, so enforcing safe limit of 8.
+/home/cdhernandez/local/miniconda3/envs/pytorch/lib/python3.10/site-packages/pandas/core/arrays/masked.py:60: UserWarning: Pandas requires version '1.3.6' or newer of 'bottleneck' (version '1.3.5' currently installed).
+  from pandas.core import (
+2024-03-25:17:52:08,358 INFO     [utils.py:145] Note: detected 192 virtual cores but NumExpr set to maximum of 64, check "NUMEXPR_MAX_THREADS" environment variable.
+2024-03-25:17:52:08,358 INFO     [utils.py:148] Note: NumExpr detected 192 cores but "NUMEXPR_MAX_THREADS" not set, so enforcing safe limit of 8.
+/home/cdhernandez/local/miniconda3/envs/pytorch/lib/python3.10/site-packages/pandas/core/arrays/masked.py:60: UserWarning: Pandas requires version '1.3.6' or newer of 'bottleneck' (version '1.3.5' currently installed).
+  from pandas.core import (
+2024-03-25:17:52:08,427 INFO     [utils.py:145] Note: detected 192 virtual cores but NumExpr set to maximum of 64, check "NUMEXPR_MAX_THREADS" environment variable.
+2024-03-25:17:52:08,427 INFO     [utils.py:148] Note: NumExpr detected 192 cores but "NUMEXPR_MAX_THREADS" not set, so enforcing safe limit of 8.
+2024-03-25:17:52:08,429 INFO     [utils.py:145] Note: detected 192 virtual cores but NumExpr set to maximum of 64, check "NUMEXPR_MAX_THREADS" environment variable.
+2024-03-25:17:52:08,429 INFO     [utils.py:148] Note: NumExpr detected 192 cores but "NUMEXPR_MAX_THREADS" not set, so enforcing safe limit of 8.
+2024-03-25:17:52:08,433 INFO     [utils.py:145] Note: detected 192 virtual cores but NumExpr set to maximum of 64, check "NUMEXPR_MAX_THREADS" environment variable.
+2024-03-25:17:52:08,433 INFO     [utils.py:148] Note: NumExpr detected 192 cores but "NUMEXPR_MAX_THREADS" not set, so enforcing safe limit of 8.
+/home/cdhernandez/local/miniconda3/envs/pytorch/lib/python3.10/site-packages/pandas/core/arrays/masked.py:60: UserWarning: Pandas requires version '1.3.6' or newer of 'bottleneck' (version '1.3.5' currently installed).
+  from pandas.core import (
+/home/cdhernandez/local/miniconda3/envs/pytorch/lib/python3.10/site-packages/pandas/core/arrays/masked.py:60: UserWarning: Pandas requires version '1.3.6' or newer of 'bottleneck' (version '1.3.5' currently installed).
+  from pandas.core import (
+/home/cdhernandez/local/miniconda3/envs/pytorch/lib/python3.10/site-packages/pandas/core/arrays/masked.py:60: UserWarning: Pandas requires version '1.3.6' or newer of 'bottleneck' (version '1.3.5' currently installed).
+  from pandas.core import (
+2024-03-25:17:52:08,502 INFO     [utils.py:145] Note: detected 192 virtual cores but NumExpr set to maximum of 64, check "NUMEXPR_MAX_THREADS" environment variable.
+2024-03-25:17:52:08,502 INFO     [utils.py:148] Note: NumExpr detected 192 cores but "NUMEXPR_MAX_THREADS" not set, so enforcing safe limit of 8.
+/home/cdhernandez/local/miniconda3/envs/pytorch/lib/python3.10/site-packages/pandas/core/arrays/masked.py:60: UserWarning: Pandas requires version '1.3.6' or newer of 'bottleneck' (version '1.3.5' currently installed).
+  from pandas.core import (
+Traceback (most recent call last):
+  File "/home/cdhernandez/local/gpt-fast/generate.py", line 423, in <module>
+    main(
+  File "/home/cdhernandez/local/gpt-fast/generate.py", line 276, in main
+    rank = maybe_init_dist()
+  File "/home/cdhernandez/local/gpt-fast/tp.py", line 49, in maybe_init_dist
+    torch.cuda.set_device(rank)
+  File "/home/cdhernandez/local/pytorch/torch/cuda/__init__.py", line 399, in set_device
+    torch._C._cuda_setDevice(device)
+RuntimeError: CUDA error: invalid device ordinal
+CUDA kernel errors might be asynchronously reported at some other API call, so the stacktrace below might be incorrect.
+For debugging consider passing CUDA_LAUNCH_BLOCKING=1.
+Compile with `TORCH_USE_CUDA_DSA` to enable device-side assertions.
+
+Traceback (most recent call last):
+  File "/home/cdhernandez/local/gpt-fast/generate.py", line 423, in <module>
+    main(
+  File "/home/cdhernandez/local/gpt-fast/generate.py", line 276, in main
+    rank = maybe_init_dist()
+  File "/home/cdhernandez/local/gpt-fast/tp.py", line 49, in maybe_init_dist
+    torch.cuda.set_device(rank)
+  File "/home/cdhernandez/local/pytorch/torch/cuda/__init__.py", line 399, in set_device
+    torch._C._cuda_setDevice(device)
+RuntimeError: CUDA error: invalid device ordinal
+CUDA kernel errors might be asynchronously reported at some other API call, so the stacktrace below might be incorrect.
+For debugging consider passing CUDA_LAUNCH_BLOCKING=1.
+Compile with `TORCH_USE_CUDA_DSA` to enable device-side assertions.
+
+Traceback (most recent call last):
+  File "/home/cdhernandez/local/gpt-fast/generate.py", line 423, in <module>
+    main(
+  File "/home/cdhernandez/local/gpt-fast/generate.py", line 276, in main
+    rank = maybe_init_dist()
+  File "/home/cdhernandez/local/gpt-fast/tp.py", line 49, in maybe_init_dist
+    torch.cuda.set_device(rank)
+  File "/home/cdhernandez/local/pytorch/torch/cuda/__init__.py", line 399, in set_device
+    torch._C._cuda_setDevice(device)
+RuntimeError: CUDA error: invalid device ordinal
+CUDA kernel errors might be asynchronously reported at some other API call, so the stacktrace below might be incorrect.
+For debugging consider passing CUDA_LAUNCH_BLOCKING=1.
+Compile with `TORCH_USE_CUDA_DSA` to enable device-side assertions.
+
+Traceback (most recent call last):
+  File "/home/cdhernandez/local/gpt-fast/generate.py", line 423, in <module>
+    main(
+  File "/home/cdhernandez/local/gpt-fast/generate.py", line 276, in main
+    rank = maybe_init_dist()
+  File "/home/cdhernandez/local/gpt-fast/tp.py", line 49, in maybe_init_dist
+    torch.cuda.set_device(rank)
+  File "/home/cdhernandez/local/pytorch/torch/cuda/__init__.py", line 399, in set_device
+    torch._C._cuda_setDevice(device)
+RuntimeError: CUDA error: invalid device ordinal
+CUDA kernel errors might be asynchronously reported at some other API call, so the stacktrace below might be incorrect.
+For debugging consider passing CUDA_LAUNCH_BLOCKING=1.
+Compile with `TORCH_USE_CUDA_DSA` to enable device-side assertions.
+
+Traceback (most recent call last):
+  File "/home/cdhernandez/local/gpt-fast/generate.py", line 423, in <module>
+    main(
+  File "/home/cdhernandez/local/gpt-fast/generate.py", line 276, in main
+    rank = maybe_init_dist()
+  File "/home/cdhernandez/local/gpt-fast/tp.py", line 49, in maybe_init_dist
+    torch.cuda.set_device(rank)
+  File "/home/cdhernandez/local/pytorch/torch/cuda/__init__.py", line 399, in set_device
+    torch._C._cuda_setDevice(device)
+RuntimeError: CUDA error: invalid device ordinal
+CUDA kernel errors might be asynchronously reported at some other API call, so the stacktrace below might be incorrect.
+For debugging consider passing CUDA_LAUNCH_BLOCKING=1.
+Compile with `TORCH_USE_CUDA_DSA` to enable device-side assertions.
+
+Traceback (most recent call last):
+  File "/home/cdhernandez/local/gpt-fast/generate.py", line 423, in <module>
+    main(
+  File "/home/cdhernandez/local/gpt-fast/generate.py", line 276, in main
+    rank = maybe_init_dist()
+  File "/home/cdhernandez/local/gpt-fast/tp.py", line 49, in maybe_init_dist
+    torch.cuda.set_device(rank)
+  File "/home/cdhernandez/local/pytorch/torch/cuda/__init__.py", line 399, in set_device
+    torch._C._cuda_setDevice(device)
+RuntimeError: CUDA error: invalid device ordinal
+CUDA kernel errors might be asynchronously reported at some other API call, so the stacktrace below might be incorrect.
+For debugging consider passing CUDA_LAUNCH_BLOCKING=1.
+Compile with `TORCH_USE_CUDA_DSA` to enable device-side assertions.
+
+Traceback (most recent call last):
+  File "/home/cdhernandez/local/gpt-fast/generate.py", line 423, in <module>
+    main(
+  File "/home/cdhernandez/local/gpt-fast/generate.py", line 276, in main
+    rank = maybe_init_dist()
+  File "/home/cdhernandez/local/gpt-fast/tp.py", line 49, in maybe_init_dist
+    torch.cuda.set_device(rank)
+  File "/home/cdhernandez/local/pytorch/torch/cuda/__init__.py", line 399, in set_device
+    torch._C._cuda_setDevice(device)
+RuntimeError: CUDA error: invalid device ordinal
+CUDA kernel errors might be asynchronously reported at some other API call, so the stacktrace below might be incorrect.
+For debugging consider passing CUDA_LAUNCH_BLOCKING=1.
+Compile with `TORCH_USE_CUDA_DSA` to enable device-side assertions.
+
+W0325 17:52:11.561000 140417423238144 torch/distributed/elastic/multiprocessing/api.py:851] Sending process 1765652 closing signal SIGTERM
+W0325 17:52:11.562000 140417423238144 torch/distributed/elastic/multiprocessing/api.py:851] Sending process 1765656 closing signal SIGTERM
+E0325 17:52:11.675000 140417423238144 torch/distributed/elastic/multiprocessing/api.py:826] failed (exitcode: 1) local_rank: 1 (pid: 1765653) of binary: /home/cdhernandez/local/miniconda3/envs/pytorch/bin/python
+Traceback (most recent call last):
+  File "/home/cdhernandez/local/miniconda3/envs/pytorch/bin/torchrun", line 33, in <module>
+    sys.exit(load_entry_point('torch', 'console_scripts', 'torchrun')())
+  File "/home/cdhernandez/local/pytorch/torch/distributed/elastic/multiprocessing/errors/__init__.py", line 347, in wrapper
+    return f(*args, **kwargs)
+  File "/home/cdhernandez/local/pytorch/torch/distributed/run.py", line 879, in main
+    run(args)
+  File "/home/cdhernandez/local/pytorch/torch/distributed/run.py", line 870, in run
+    elastic_launch(
+  File "/home/cdhernandez/local/pytorch/torch/distributed/launcher/api.py", line 132, in __call__
+    return launch_agent(self._config, self._entrypoint, list(args))
+  File "/home/cdhernandez/local/pytorch/torch/distributed/launcher/api.py", line 263, in launch_agent
+    raise ChildFailedError(
+torch.distributed.elastic.multiprocessing.errors.ChildFailedError: 
+============================================================
+generate.py FAILED
+------------------------------------------------------------
+Failures:
+[1]:
+  time      : 2024-03-25_17:52:11
+  host      : devgpu001.ash8.facebook.com
+  rank      : 2 (local_rank: 2)
+  exitcode  : 1 (pid: 1765654)
+  error_file: <N/A>
+  traceback : To enable traceback see: https://pytorch.org/docs/stable/elastic/errors.html
+[2]:
+  time      : 2024-03-25_17:52:11
+  host      : devgpu001.ash8.facebook.com
+  rank      : 3 (local_rank: 3)
+  exitcode  : 1 (pid: 1765655)
+  error_file: <N/A>
+  traceback : To enable traceback see: https://pytorch.org/docs/stable/elastic/errors.html
+[3]:
+  time      : 2024-03-25_17:52:11
+  host      : devgpu001.ash8.facebook.com
+  rank      : 5 (local_rank: 5)
+  exitcode  : 1 (pid: 1765657)
+  error_file: <N/A>
+  traceback : To enable traceback see: https://pytorch.org/docs/stable/elastic/errors.html
+[4]:
+  time      : 2024-03-25_17:52:11
+  host      : devgpu001.ash8.facebook.com
+  rank      : 6 (local_rank: 6)
+  exitcode  : 1 (pid: 1765658)
+  error_file: <N/A>
+  traceback : To enable traceback see: https://pytorch.org/docs/stable/elastic/errors.html
+[5]:
+  time      : 2024-03-25_17:52:11
+  host      : devgpu001.ash8.facebook.com
+  rank      : 7 (local_rank: 7)
+  exitcode  : 1 (pid: 1765659)
+  error_file: <N/A>
+  traceback : To enable traceback see: https://pytorch.org/docs/stable/elastic/errors.html
+------------------------------------------------------------
+Root Cause (first observed failure):
+[0]:
+  time      : 2024-03-25_17:52:11
+  host      : devgpu001.ash8.facebook.com
+  rank      : 1 (local_rank: 1)
+  exitcode  : 1 (pid: 1765653)
+  error_file: <N/A>
+  traceback : To enable traceback see: https://pytorch.org/docs/stable/elastic/errors.html
+============================================================
