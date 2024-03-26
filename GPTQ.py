@@ -150,7 +150,7 @@ class GenericGPTQRunner(fx.Interpreter):
         }
 
         # trace model for one input
-        one_input = tuple([multi.values[0].cpu() for multi in inputs])
+        one_input = [multi.values[0].cpu() for multi in inputs]
         exported_model = torch._dynamo.export(
             model.cpu(), aten_graph=True, pre_dispatch=True, tracing_mode="fake"
         )(*one_input)
