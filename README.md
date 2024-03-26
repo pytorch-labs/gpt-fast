@@ -37,6 +37,7 @@ Projects inspired by gpt-fast in the community:
 
 - [gpt-blazing](https://github.com/armed-gpt/gpt-blazing): applies the same performance optimization strategy to more models (e.g., baichuan2).
 - [gptfast](https://github.com/MDK8888/GPTFast): applies a subset of the performance optimizations to all Huggingface models
+- [gpt-accelera](https://github.com/Edward-Sun/gpt-accelera): extends `gpt-fast` to SFT/RM/PPO training and batched inference to optimize the throughput
 
 ## Installation
 [Download PyTorch nightly](https://pytorch.org/get-started/locally/)
