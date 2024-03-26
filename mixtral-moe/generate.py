@@ -70,7 +70,7 @@ def decode_one_token(model: Transformer, x: torch.Tensor, input_pos: torch.Tenso
 def decode_n_tokens(model: Transformer, cur_token: torch.Tensor, input_pos: torch.Tensor, num_new_tokens: int, callback=lambda _: _, **sampling_kwargs):
     new_tokens, new_probs = [], []
     for i in range(num_new_tokens):
-        with torch.backends.cuda.sdp_kernel(enable_flash=False, enable_mem_efficient=False, enable_math=True): # Actually better for Inductor to codegen attention here
+        with torch.nn.attention.sdpa_kernel(torch.nn.attention.SDPBackend.MATH): # Actually better for Inductor to codegen attention here
             next_token, next_prob = decode_one_token(
                 model, cur_token, input_pos, **sampling_kwargs
             )
