@@ -78,10 +78,16 @@ class KVCache(nn.Module):
         # input_pos: [S], k_val: [B, H, S, D]
         assert input_pos.shape[0] == k_val.shape[2]
 
+
         k_out = self.k_cache
         v_out = self.v_cache
         k_out[:, :, input_pos] = k_val
+        breakpoint()
         v_out[:, :, input_pos] = v_val
+        breakpoint()
+        # k_out = torch.ops.aten.index_put_(self.k_cache, [None, None, input_pos], k_val)
+        # v_out = torch.ops.aten.index_put_(self.v_cache, [None, None, input_pos], v_val)
+
 
         return k_out, v_out
 
@@ -174,7 +180,6 @@ class Attention(nn.Module):
 
         kv_size = self.n_local_heads * self.head_dim
         q, k, v = self.wqkv(x).split([self.dim, kv_size, kv_size], dim=-1)
-
         q = q.view(bsz, seqlen, self.n_head, self.head_dim)
         k = k.view(bsz, seqlen, self.n_local_heads, self.head_dim)
         v = v.view(bsz, seqlen, self.n_local_heads, self.head_dim)
