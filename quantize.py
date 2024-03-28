@@ -11,6 +11,8 @@ import torch.nn as nn
 import torch.nn.functional as F
 from sentencepiece import SentencePieceProcessor
 
+from GPTQ import GenericGPTQRunner, InputRecorder
+
 try:
     from GPTQ import GenericGPTQRunner, InputRecorder
     from eval import get_task_dict, evaluate, lm_eval
@@ -286,6 +288,10 @@ class GPTQQuantHandler(QuantHandler):
         pad_calibration_inputs,
     ) -> "StateDict":
         inputs = GPTQQuantHandler.get_inputs(self.mod, tokenizer, calibration_tasks, calibration_limit, calibration_seq_length, pad_calibration_inputs)
+        self.mod=self.mod.to("cpu")
+        inputs=[x.cpu() if hasattr(x, "cpu") else x for x in inputs]
+        self.mod(*inputs)
+
         print("Tracing model for GPTQ")
         GPTQ_runner = GenericGPTQRunner(
             self.mod,
@@ -438,12 +444,12 @@ class WeightOnlyInt4QuantHandler:
         return self.mod
 
 class WeightOnlyInt4GPTQQuantHandler(GPTQQuantHandler):
-    def __init__(self, mod, groupsize=128, inner_k_tiles=8, padding=True):
+    def __init__(self, mod, groupsize=128, inner_k_tiles=8, padding_allowed=True):
         from model import find_multiple
         self.mod = mod
         self.groupsize = groupsize
         self.inner_k_tiles = inner_k_tiles
-        self.padding = padding
+        self.padding_allowed = padding_allowed
         self.get_qparams_func = lambda w: get_group_qparams(w, 4, groupsize)
         self.quantize_func = lambda w, qparams: \
             group_quantize_tensor_from_qparams(w, qparams[0], qparams[1], 4, groupsize)
@@ -453,7 +459,7 @@ class WeightOnlyInt4GPTQQuantHandler(GPTQQuantHandler):
             [torch.cat(x, dim=1) for x in zip(*qparams_list)]
         # skip unless padding=True or its correctly sized
         self.skip_layer_func = lambda linear_weight: not (
-            _check_linear_int4_k(linear_weight.shape[-1], groupsize, inner_k_tiles) or padding
+            _check_linear_int4_k(linear_weight.shape[-1], groupsize, inner_k_tiles) or padding_allowed
         )
         # we need to do the padding here, both for q and the qparams if necessary
         def make_names_and_values_dict_func(q, qparams):
@@ -472,7 +478,7 @@ class WeightOnlyInt4GPTQQuantHandler(GPTQQuantHandler):
 
 
     def convert_for_runtime(self, use_cuda):
-        replace_linear_int4(self.mod, self.groupsize, self.inner_k_tiles, self.padding, use_cuda)
+        replace_linear_int4(self.mod, self.groupsize, self.inner_k_tiles, self.padding_allowed, use_cuda)
         return self.mod
 
 class WeightOnlyInt4Linear(torch.nn.Module):
