@@ -132,7 +132,7 @@ def encode_tokens(tokenizer, string, bos=True, device='cuda'):
     tokens = tokenizer.encode(string)
     if bos:
         tokens = [tokenizer.bos_id()] + tokens
-    return torch.tensor(tokens, dtype=torch.int, device=device)
+    return torch.tensor(tokens, dtype=torch.int, device=args.device)
 
 def _load_model(checkpoint_path, device, precision, use_tp):
     with torch.device('meta'):
@@ -248,7 +248,8 @@ def main(
         if (i != num_samples - 1 or not profile) or (use_tp and rank != 0):
             prof = contextlib.nullcontext()
         else:
-            torch.profiler._utils._init_for_cuda_graphs()
+            if device == 'cuda':
+                torch.profiler._utils._init_for_cuda_graphs()
             prof = torch.profiler.profile()
         with prof:
             y = generate(
