@@ -14,6 +14,9 @@ This is *NOT* intended to be a "framework" or "library" - it is intended to show
 
 For an in-depth walkthrough of what's in this codebase, see this [blog post](https://pytorch.org/blog/accelerating-generative-ai-2/).
 
+## Examples
+In the spirit of keeping the repo minimal, here are various examples of extensions you can make to gpt-fast as PRs.
+- [Gemma support](https://github.com/pytorch-labs/gpt-fast/pull/115)
 ## Supported Models
 
 ### LLaMA family
