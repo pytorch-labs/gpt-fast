@@ -486,7 +486,7 @@ class WeightOnlyInt4Linear(torch.nn.Module):
             bias=True, device=None, dtype=None, groupsize: int = 128, inner_k_tiles: int = 8, use_cuda=True,
     ) -> None:
         super().__init__()
-        self.padding = _check_linear_int4_k(in_features, groupsize, inner_k_tiles)
+        self.padding = not _check_linear_int4_k(in_features, groupsize, inner_k_tiles)
         if self.padding:
             from model import find_multiple
             self.origin_in_features = in_features
