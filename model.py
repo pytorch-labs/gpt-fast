@@ -107,7 +107,12 @@ class Transformer(nn.Module):
         max_seq_length = find_multiple(max_seq_length, 8)
         self.max_seq_length = max_seq_length
         self.max_batch_size = max_batch_size
-        dtype=self.output.weight.dtype
+        dtype = self.output.weight.dtype
+        # For quantized layers, dtype is encoded in scales
+        if hasattr(self.output, "scales"):
+            dtype = self.output.scales.dtype
+        elif hasattr(self.output, "scales_and_zeros"):
+            dtype = self.output.scales_and_zeros.dtype
         for b in self.layers:
             b.attention.kv_cache = KVCache(max_batch_size, max_seq_length, self.config.n_local_heads, head_dim, dtype)
 
