@@ -500,16 +500,10 @@ class WeightOnlyInt4Linear(torch.nn.Module):
 
         assert out_features % 8 == 0, "require out_features % 8 == 0"
         assert in_features % (inner_k_tiles * 16) == 0, "require in_features % (innerKTiles * 16) == 0"
-        if use_cuda:
-            self.register_buffer(
-                "weight",
-                torch.empty((out_features // 8, in_features // (inner_k_tiles * 16), 32, inner_k_tiles // 2), dtype=torch.int32)
-            )
-        else:
-            self.register_buffer(
-                "weight",
-                torch.empty((out_features, in_features // 2), dtype=torch.uint8)
-            )
+        self.register_buffer(
+            "weight",
+            torch.empty((out_features // 8, in_features // (inner_k_tiles * 16), 32, inner_k_tiles // 2), dtype=torch.int32)
+        )
         self.register_buffer(
             "scales_and_zeros",
             torch.empty((in_features // groupsize, out_features, 2), dtype=torch.bfloat16)
