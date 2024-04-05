@@ -52,7 +52,7 @@ def logits_to_probs(logits, temperature: float = 1.0, top_k: Optional[int] = Non
     return probs
 
 def sample(logits, temperature: float = 1.0, top_k: Optional[int] = None):
-    probs = logits_to_probs(logits[0, -1], temperature, top_k)
+    probs = logits_to_probs(logits[:, -1], temperature, top_k)
     idx_next = multinomial_sample_one_no_sync(probs)
     return idx_next, probs
 
@@ -74,11 +74,12 @@ def decode_n_tokens(model: Transformer, cur_token: torch.Tensor, input_pos: torc
             next_token, next_prob = decode_one_token(
                 model, cur_token, input_pos, **sampling_kwargs
             )
+            next_token = next_token.clone()
             input_pos += 1
-            new_tokens.append(next_token.clone())
+            new_tokens.append(next_token)
             callback(new_tokens[-1])
             new_probs.append(next_prob.clone())
-            cur_token = next_token.view(1, -1)
+            cur_token = next_token
 
     return new_tokens, new_probs
 
@@ -151,7 +152,7 @@ def generate(
     """
     Takes a conditioning sequence (prompt) as input and continues to generate as many tokens as requested.
     """
-
+    batch_size = 32
     is_speculative = draft_model is not None
     # create an empty tensor of the expected final shape and fill in the current tokens
     T = prompt.size(0)
@@ -164,20 +165,21 @@ def generate(
     device, dtype = prompt.device, prompt.dtype
     max_seq_length = max_seq_length + speculate_k + 1 if is_speculative else max_seq_length
     with torch.device(device):
-        model.setup_caches(max_batch_size=1, max_seq_length=max_seq_length)
+        model.setup_caches(max_batch_size=batch_size, max_seq_length=max_seq_length)
         if is_speculative and draft_model is not model:
-            draft_model.setup_caches(max_batch_size=1, max_seq_length=max_seq_length)
+            draft_model.setup_caches(max_batch_size=batch_size, max_seq_length=max_seq_length)
 
     # create an empty tensor of the expected final shape and fill in the current tokens
-    empty = torch.empty(T_new, dtype=dtype, device=device)
-    empty[:T] = prompt
+    empty = torch.empty(batch_size, T_new, dtype=dtype, device=device)
+    prompt = prompt.view(1, -1).repeat(batch_size, 1)
+    empty[:, :T] = prompt
     seq = empty
     input_pos = torch.arange(0, T, device=device)
 
-    next_token = prefill(model, prompt.view(1, -1), input_pos, **sampling_kwargs)
+    next_token = prefill(model, prompt.view(batch_size, -1), input_pos, **sampling_kwargs)
     if is_speculative:
-        prefill(draft_model, prompt.view(1, -1), input_pos, **sampling_kwargs)
-    seq[T] = next_token
+        prefill(draft_model, prompt.view(batch_size, -1), input_pos, **sampling_kwargs)
+    seq[:, T] = next_token.squeeze()
 
     input_pos = torch.tensor([T], device=device, dtype=torch.int)
     accept_counts = [0] * (speculate_k + 1)
@@ -199,8 +201,8 @@ def generate(
             input_pos = input_pos + num_added
             next_token = next_tokens[-1]
     else:
-        generated_tokens, _ = decode_n_tokens(model, next_token.view(1, -1), input_pos, max_new_tokens - 1, callback=callback, **sampling_kwargs)
-        seq[T + 1:] = torch.cat(generated_tokens)
+        generated_tokens, _ = decode_n_tokens(model, next_token.clone(), input_pos, max_new_tokens - 1, callback=callback, **sampling_kwargs)
+        seq[:, T + 1:] = torch.cat(generated_tokens, dim=-1)
 
     generate_stats = {
         'accept_counts': accept_counts
@@ -385,7 +387,7 @@ def main(
             print(tokenizer.decode(y.tolist()))
         else:
             print()
-        tokens_generated = y.size(0) - prompt_length
+        tokens_generated = y.size(-1) - prompt_length
         tokens_sec = tokens_generated / t
         aggregate_metrics['tokens_per_sec'].append(tokens_sec)
         print(f"Time for inference {i + 1}: {t:.02f} sec total, {tokens_sec:.02f} tokens/sec")
