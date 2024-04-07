@@ -177,6 +177,7 @@ def generate(
     next_token = prefill(model, prompt.view(1, -1), input_pos, **sampling_kwargs)
     if is_speculative:
         prefill(draft_model, prompt.view(1, -1), input_pos, **sampling_kwargs)
+    next_token = next_token.clone()
     seq[T] = next_token
 
     input_pos = torch.tensor([T], device=device, dtype=torch.int)
