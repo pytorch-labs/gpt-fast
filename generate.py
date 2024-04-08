@@ -22,7 +22,6 @@ def device_sync(device):
         print(f"device={device} is not yet suppported")
 
 
-torch._inductor.config.coordinate_descent_tuning = True
 torch._inductor.config.triton.unique_kernel_names = True
 torch._inductor.config.fx_graph_cache = True # Experimental feature to reduce compilation times, will be on by default in future
 
@@ -266,6 +265,10 @@ def main(
 ) -> None:
     """Generates text samples based on a pre-trained Transformer model and tokenizer.
     """
+    if "cpu" in device:
+        torch._inductor.config.coordinate_descent_tuning = False
+    else:
+        torch._inductor.config.coordinate_descent_tuning = True
     assert checkpoint_path.is_file(), checkpoint_path
 
     tokenizer_path = checkpoint_path.parent / "tokenizer.model"

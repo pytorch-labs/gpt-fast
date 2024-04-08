@@ -366,11 +366,12 @@ class WeightOnlyInt8Linear(torch.nn.Module):
         self.register_buffer("scales", torch.ones(out_features, dtype=torch.bfloat16))
 
     def forward(self, input: torch.Tensor) -> torch.Tensor:
+        return F.linear(input, self.weight.to(dtype=input.dtype)) * self.scales
         # TODO: This is a workaround to speedup int8 woq performance. Will remove this when
         # https://github.com/pytorch/pytorch/pull/120985 is in PyTorch stable release.
-        return linear_forward_int8(
-            input,
-            self.weight, self.scales, self.out_features)
+        #return linear_forward_int8(
+        #    input,
+        #    self.weight, self.scales, self.out_features)
 
 ##### weight only int4 per channel groupwise quantized code ######
 
