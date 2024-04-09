@@ -8,12 +8,12 @@ export MODEL_REPO=meta-llama/Llama-2-7b-chat-hf
 
 
 python quantize.py --checkpoint_path checkpoints/$MODEL_REPO/model.pth --mode int4-hqq
-python generate.py --checkpoint_path checkpoints/$MODEL_REPO/model_int4-hqq.g32.cuda.pth --compile
+# python generate.py --checkpoint_path checkpoints/$MODEL_REPO/model_int4-hqq.g32.cuda.pth --compile
 python eval.py --checkpoint_path checkpoints/$MODEL_REPO/model_int4-hqq.g32.cuda.pth --tasks wikitext
 
-# python quantize.py --checkpoint_path checkpoints/$MODEL_REPO/model.pth --mode int4
+python quantize.py --checkpoint_path checkpoints/$MODEL_REPO/model.pth --mode int4
 # python generate.py --checkpoint_path checkpoints/$MODEL_REPO/model_int4.g32.cuda.pth --compile
-# python eval.py --checkpoint_path checkpoints/$MODEL_REPO/model_int4.g32.cuda.pth --tasks wikitext --limit 5
+python eval.py --checkpoint_path checkpoints/$MODEL_REPO/model_int4.g32.cuda.pth --tasks wikitext
 
 # python quantize.py --checkpoint_path checkpoints/$MODEL_REPO/model.pth --mode int4
 # python eval.py --checkpoint_path checkpoints/$MODEL_REPO/model_int4.g32.cuda.pth --tasks wikitext --limit 5
