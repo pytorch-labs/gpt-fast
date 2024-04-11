@@ -458,7 +458,10 @@ class WeightOnlyInt4GPTQQuantHandler(GPTQQuantHandler):
         # we need to do the padding here, both for q and the qparams if necessary
         def make_names_and_values_dict_func(q, qparams):
             k = q.shape[1]
-            new_k = find_multiple(k, 1024)
+            if not _check_linear_int4_k(k, groupsize, inner_k_tiles):
+                new_k = find_multiple(k, 1024)
+            else:
+                new_k = k
             # how much we need to pad the weight
             delta_k = new_k - q.shape[1]
             final_q = torch.ops.aten._convert_weight_to_int4pack(F.pad(q, pad=(0, delta_k)), inner_k_tiles)
