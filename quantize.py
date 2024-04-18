@@ -539,7 +539,7 @@ def quantize(
     device: str = default_device,
 ) -> None:
     assert checkpoint_path.is_file(), checkpoint_path
-
+    device = 'cpu'
     precision = torch.bfloat16
 
     print("Loading model ...")
