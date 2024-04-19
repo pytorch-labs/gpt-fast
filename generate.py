@@ -32,8 +32,6 @@ default_device = 'cuda' if torch.cuda.is_available() else 'cpu'
 wd = Path(__file__).parent.parent.resolve()
 sys.path.append(str(wd))
 
-from sentencepiece import SentencePieceProcessor
-
 from model import Transformer
 from tokenizer import get_tokenizer
 
@@ -268,11 +266,8 @@ def main(
     """
     assert checkpoint_path.is_file(), checkpoint_path
 
-    if "Llama-3" in str(checkpoint_path):
-        tokenizer_path = checkpoint_path.parent / "original/tokenizer.model"
-    else:
-        tokenizer_path = checkpoint_path.parent / "tokenizer.model"
-    assert tokenizer_path.is_file(), tokenizer_path
+    tokenizer_path = checkpoint_path.parent / "tokenizer.model"
+    assert tokenizer_path.is_file(), str(tokenizer_path)
 
     global print
     from tp import maybe_init_dist
@@ -302,7 +297,6 @@ def main(
 
     tokenizer = get_tokenizer(tokenizer_path, checkpoint_path)
 
-    #tokenizer = SentencePieceProcessor(model_file=str(tokenizer_path))
     encoded = encode_tokens(tokenizer, prompt, bos=True, device=device)
     prompt_length = encoded.size(0)
 
