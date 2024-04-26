@@ -14,6 +14,9 @@ This is *NOT* intended to be a "framework" or "library" - it is intended to show
 
 For an in-depth walkthrough of what's in this codebase, see this [blog post](https://pytorch.org/blog/accelerating-generative-ai-2/).
 
+## Examples
+In the spirit of keeping the repo minimal, here are various examples of extensions you can make to gpt-fast as PRs.
+- [Gemma support](https://github.com/pytorch-labs/gpt-fast/pull/115)
 ## Supported Models
 
 ### LLaMA family
@@ -37,6 +40,7 @@ Projects inspired by gpt-fast in the community:
 
 - [gpt-blazing](https://github.com/armed-gpt/gpt-blazing): applies the same performance optimization strategy to more models (e.g., baichuan2).
 - [gptfast](https://github.com/MDK8888/GPTFast): applies a subset of the performance optimizations to all Huggingface models
+- [gpt-accelera](https://github.com/Edward-Sun/gpt-accelera): extends `gpt-fast` to SFT/RM/PPO training and batched inference to optimize the throughput
 
 ## Installation
 [Download PyTorch nightly](https://pytorch.org/get-started/locally/)
@@ -53,6 +57,7 @@ Then login with `huggingface-cli login`
 ## Downloading Weights
 Models tested/supported
 ```text
+tinyllamas/stories{15,42,100}
 openlm-research/open_llama_7b
 meta-llama/Llama-2-7b-chat-hf
 meta-llama/Llama-2-13b-chat-hf

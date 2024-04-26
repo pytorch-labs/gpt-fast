@@ -365,6 +365,9 @@ def prepare_int4_weight_and_scales_and_zeros(weight_bf16, groupsize, inner_k_til
     weight_int4pack = torch.ops.aten._convert_weight_to_int4pack(weight_int32, inner_k_tiles)
     return weight_int4pack, scales_and_zeros
 
+def _calc_padded_size(k, groupsize=1, innner_k_tiles=1):
+    from model import find_multiple
+    return find_multiple(k, 1024)
 
 def linear_forward_int4(x, weight_int4pack, scales_and_zeros, out_features, groupsize):
     origin_x_size = x.size()
@@ -378,29 +381,24 @@ def linear_forward_int4(x, weight_int4pack, scales_and_zeros, out_features, grou
 def _check_linear_int4_k(k, groupsize = 1, inner_k_tiles = 1):
     return k % groupsize == 0 and k % (inner_k_tiles * 16) == 0
 
-def replace_linear_int4(module, groupsize, inner_k_tiles, padding, use_cuda):
+def replace_linear_int4(module, groupsize, inner_k_tiles, padding_allowed, use_cuda):
     for name, child in module.named_children():
         if isinstance(child, nn.Linear):
-            if _check_linear_int4_k(child.in_features, groupsize, inner_k_tiles):
+            if _check_linear_int4_k(child.in_features, groupsize, inner_k_tiles) or padding_allowed:
                 setattr(module, name, WeightOnlyInt4Linear(
                     child.in_features, child.out_features, bias=False,
-                    groupsize=groupsize, inner_k_tiles=inner_k_tiles, padding=False, use_cuda=use_cuda
-                ))
-            elif padding:
-                setattr(module, name, WeightOnlyInt4Linear(
-                    child.in_features, child.out_features, bias=False,
-                    groupsize=groupsize, inner_k_tiles=inner_k_tiles, padding=True, use_cuda=use_cuda
+                    groupsize=groupsize, inner_k_tiles=inner_k_tiles, use_cuda=use_cuda
                 ))
         else:
-            replace_linear_int4(child, groupsize, inner_k_tiles, padding, use_cuda)
+            replace_linear_int4(child, groupsize, inner_k_tiles, padding_allowed, use_cuda)
 
 
 class WeightOnlyInt4QuantHandler:
-    def __init__(self, mod, groupsize=128, inner_k_tiles=8, padding=True):
+    def __init__(self, mod, groupsize=128, inner_k_tiles=8, padding_allowed=True):
         self.mod = mod
         self.groupsize = groupsize
         self.inner_k_tiles = inner_k_tiles
-        self.padding = padding
+        self.padding_allowed = padding_allowed
         assert groupsize in [32, 64, 128, 256]
         assert inner_k_tiles in [2, 4, 8]
 
@@ -417,7 +415,7 @@ class WeightOnlyInt4QuantHandler:
 
                 weight = mod.weight.data
                 if not _check_linear_int4_k(in_features, self.groupsize, self.inner_k_tiles):
-                    if self.padding:
+                    if self.padding_allowed:
                         from model import find_multiple
                         import torch.nn.functional as F
                         print(f"warning: {fqn} is padded to satisfy in_features % 1024 == 0")
@@ -436,7 +434,7 @@ class WeightOnlyInt4QuantHandler:
         return cur_state_dict
 
     def convert_for_runtime(self, use_cuda):
-        replace_linear_int4(self.mod, self.groupsize, self.inner_k_tiles, self.padding, use_cuda)
+        replace_linear_int4(self.mod, self.groupsize, self.inner_k_tiles, self.padding_allowed, use_cuda)
         return self.mod
 
 class WeightOnlyInt4GPTQQuantHandler(GPTQQuantHandler):
@@ -460,7 +458,10 @@ class WeightOnlyInt4GPTQQuantHandler(GPTQQuantHandler):
         # we need to do the padding here, both for q and the qparams if necessary
         def make_names_and_values_dict_func(q, qparams):
             k = q.shape[1]
-            new_k = find_multiple(k, 1024)
+            if not _check_linear_int4_k(k, groupsize, inner_k_tiles):
+                new_k = find_multiple(k, 1024)
+            else:
+                new_k = k
             # how much we need to pad the weight
             delta_k = new_k - q.shape[1]
             final_q = torch.ops.aten._convert_weight_to_int4pack(F.pad(q, pad=(0, delta_k)), inner_k_tiles)
@@ -485,11 +486,11 @@ class WeightOnlyInt4Linear(torch.nn.Module):
 
     def __init__(
             self, in_features: int, out_features: int,
-            bias=True, device=None, dtype=None, groupsize: int = 128, inner_k_tiles: int = 8, padding: bool = True, use_cuda=True,
+            bias=True, device=None, dtype=None, groupsize: int = 128, inner_k_tiles: int = 8, use_cuda=True,
     ) -> None:
         super().__init__()
-        self.padding = padding
-        if padding:
+        self.padding = not _check_linear_int4_k(in_features, groupsize, inner_k_tiles)
+        if self.padding:
             from model import find_multiple
             self.origin_in_features = in_features
             in_features = find_multiple(in_features, 1024)
@@ -502,16 +503,10 @@ class WeightOnlyInt4Linear(torch.nn.Module):
 
         assert out_features % 8 == 0, "require out_features % 8 == 0"
         assert in_features % (inner_k_tiles * 16) == 0, "require in_features % (innerKTiles * 16) == 0"
-        if use_cuda:
-            self.register_buffer(
-                "weight",
-                torch.empty((out_features // 8, in_features // (inner_k_tiles * 16), 32, inner_k_tiles // 2), dtype=torch.int32)
-            )
-        else:
-            self.register_buffer(
-                "weight",
-                torch.empty((out_features, in_features // 2), dtype=torch.uint8)
-            )
+        self.register_buffer(
+            "weight",
+            torch.empty((out_features // 8, in_features // (inner_k_tiles * 16), 32, inner_k_tiles // 2), dtype=torch.int32)
+        )
         self.register_buffer(
             "scales_and_zeros",
             torch.empty((in_features // groupsize, out_features, 2), dtype=torch.bfloat16)
@@ -544,7 +539,7 @@ def quantize(
     device: str = default_device,
 ) -> None:
     assert checkpoint_path.is_file(), checkpoint_path
-
+    device = 'cpu'
     precision = torch.bfloat16
 
     print("Loading model ...")
@@ -554,6 +549,8 @@ def quantize(
         model = Transformer.from_name(checkpoint_path.parent.name)
 
     checkpoint = torch.load(str(checkpoint_path), mmap=True, weights_only=True)
+    if "model" in checkpoint and "stories" in str(checkpoint_path):
+        checkpoint = checkpoint["model"]
     model.load_state_dict(checkpoint, assign=True)
     model = model.to(dtype=precision, device=device)
 
@@ -597,7 +594,7 @@ def quantize(
 
         dir_name = checkpoint_path.parent
         base_name = checkpoint_path.name
-        new_base_name = base_name.replace('.pth', f"{label}int4-gptq.g{groupsize}.pth")
+        new_base_name = base_name.replace('.pth', f"{label}int4-gptq.g{groupsize}.{device}.pth")
     else:
         raise ValueError(f"Invalid quantization mode {mode} needs to be one of [int8, int4, int4-gpptq]")
 
