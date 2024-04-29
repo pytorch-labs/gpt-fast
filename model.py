@@ -53,7 +53,7 @@ class ModelArgs:
             assert len(config[0]) != len(config[1]), name # make sure only one 'best' match
             
         # return cls(**transformer_configs[config[0]])
-        return cls(**dict(block_size=8192, n_layer=80, n_head=64, n_local_heads=8, dim=8192, intermediate_size=14336, vocab_size=128256))
+        return cls(**dict(block_size=8192, n_layer=80, n_head=64, n_local_heads=8, dim=8192, intermediate_size=28672, vocab_size=128256))
 
 
 transformer_configs = {
@@ -67,7 +67,7 @@ transformer_configs = {
     "stories15M": dict(n_layer=6, n_head=6, dim=288),
     "stories110M": dict(n_layer=12, n_head=12, dim=768),
     "Llama-3-8B": dict(block_size=8192, n_layer=32, n_head=32, n_local_heads=8, dim=4096, intermediate_size=14336, vocab_size=128256),
-    "llama-3-70b-hf-pt": dict(block_size=8192, n_layer=80, n_head=64, n_local_heads=8, dim=8192, intermediate_size=14336, vocab_size=128256),
+    "llama-3-70b-hf-pt": dict(block_size=8192, n_layer=80, n_head=64, n_local_heads=8, dim=8192, intermediate_size=28672, vocab_size=128256),
 }
 
 class KVCache(nn.Module):
