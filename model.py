@@ -52,8 +52,7 @@ class ModelArgs:
             config.sort(key=len, reverse=True)
             assert len(config[0]) != len(config[1]), name # make sure only one 'best' match
             
-        # return cls(**transformer_configs[config[0]])
-        return cls(**dict(block_size=8192, n_layer=80, n_head=64, n_local_heads=8, dim=8192, intermediate_size=28672, vocab_size=128256))
+        return cls(**transformer_configs[config[0]])
 
 
 transformer_configs = {
