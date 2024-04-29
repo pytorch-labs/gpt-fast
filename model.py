@@ -44,14 +44,14 @@ class ModelArgs:
         if name in transformer_configs:
             return cls(**transformer_configs[name])
         # fuzzy search
-        config = [config for config in transformer_configs if config in str(name).upper() or config in str(name)]
+        config = [config for config in transformer_configs if config.lower() in str(name).lower() or config.lower() in str(name).lower()]
 
         # We may have two or more configs matched (e.g. "7B" and "Mistral-7B"). Find the best config match,
         # take longer name (as it have more symbols matched)
         if len(config) > 1:
             config.sort(key=len, reverse=True)
             assert len(config[0]) != len(config[1]), name # make sure only one 'best' match
-
+            
         return cls(**transformer_configs[config[0]])
 
 
@@ -65,7 +65,8 @@ transformer_configs = {
     "Mistral-7B": dict(n_layer=32, n_head=32, n_local_heads=8, dim=4096, intermediate_size=14336, vocab_size=32000),
     "stories15M": dict(n_layer=6, n_head=6, dim=288),
     "stories110M": dict(n_layer=12, n_head=12, dim=768),
-    "Llama-3-8B": dict(block_size=8192, n_layer=32, n_head=32, n_local_heads=8, dim=4096, intermediate_size=14336, vocab_size=128256),
+    "llama-3-8b": dict(block_size=8192, n_layer=32, n_head=32, n_local_heads=8, dim=4096, intermediate_size=14336, vocab_size=128256),
+    "llama-3-70b": dict(block_size=8192, n_layer=80, n_head=64, n_local_heads=8, dim=8192, intermediate_size=28672, vocab_size=128256),
 }
 
 class KVCache(nn.Module):
