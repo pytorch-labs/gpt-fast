@@ -73,15 +73,15 @@ def get_group_qparams(w, n_bit=4, groupsize=128):
     max_int = 2**n_bit - 1
     scales = (max_val - min_val).clamp(min=1e-6) / max_int
     zeros = min_val + scales * (2 ** (n_bit - 1))
-    return scales.to(torch.bfloat16).reshape(w.shape[0], -1), zeros.to(
-        torch.bfloat16
+    return scales.to(torch.float16).reshape(w.shape[0], -1), zeros.to(
+        torch.float16
     ).reshape(w.shape[0], -1)
 
 
 def pack_scales_and_zeros(scales, zeros):
     assert scales.shape == zeros.shape
-    assert scales.dtype == torch.bfloat16
-    assert zeros.dtype == torch.bfloat16
+    assert scales.dtype == torch.float16
+    assert zeros.dtype == torch.float16
     return (
         torch.cat(
             [
@@ -351,7 +351,7 @@ class WeightOnlyInt8Linear(torch.nn.Module):
         self.in_features = in_features
         self.out_features = out_features
         self.register_buffer("weight", torch.empty((out_features, in_features), dtype=torch.int8))
-        self.register_buffer("scales", torch.ones(out_features, dtype=torch.bfloat16))
+        self.register_buffer("scales", torch.ones(out_features, dtype=torch.float16))
 
     def forward(self, input: torch.Tensor) -> torch.Tensor:
         return F.linear(input, self.weight.to(dtype=input.dtype)) * self.scales
@@ -426,7 +426,7 @@ class WeightOnlyInt4QuantHandler:
                             "and that groupsize and inner_k_tiles*16 evenly divide into it")
                         continue
                 weight_int4pack, scales_and_zeros = prepare_int4_weight_and_scales_and_zeros(
-                    weight.to(torch.bfloat16), self.groupsize, self.inner_k_tiles
+                    weight.to(torch.float16), self.groupsize, self.inner_k_tiles
                 )
                 cur_state_dict[f"{fqn}.weight"] = weight_int4pack.to('cpu')
                 cur_state_dict[f"{fqn}.scales_and_zeros"] = scales_and_zeros.to('cpu')
@@ -509,11 +509,11 @@ class WeightOnlyInt4Linear(torch.nn.Module):
         )
         self.register_buffer(
             "scales_and_zeros",
-            torch.empty((in_features // groupsize, out_features, 2), dtype=torch.bfloat16)
+            torch.empty((in_features // groupsize, out_features, 2), dtype=torch.float16)
         )
 
     def forward(self, input: torch.Tensor) -> torch.Tensor:
-        input = input.to(torch.bfloat16)
+        input = input.to(torch.float16)
         if self.padding:
             import torch.nn.functional as F
             input = F.pad(input, pad=(0, self.in_features - self.origin_in_features))
@@ -540,7 +540,7 @@ def quantize(
 ) -> None:
     assert checkpoint_path.is_file(), checkpoint_path
     device = 'cpu'
-    precision = torch.bfloat16
+    precision = torch.float16
 
     print("Loading model ...")
     t0 = time.time()

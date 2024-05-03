@@ -279,7 +279,7 @@ def main(
             print = lambda *args, **kwargs: None
 
     print(f"Using device={device}")
-    precision = torch.bfloat16
+    precision = torch.float16
     is_speculative = draft_checkpoint_path is not None
     is_chat = "chat" in str(checkpoint_path)
 
