@@ -172,7 +172,7 @@ def generate(
     seq = empty
     input_pos = torch.arange(0, T, device=device)
 
-    next_token = prefill(model, prompt.view(1, -1), input_pos, **sampling_kwargs)
+    next_token = prefill(model, prompt.view(1, -1), input_pos, **sampling_kwargs).clone()
     if is_speculative:
         prefill(draft_model, prompt.view(1, -1), input_pos, **sampling_kwargs)
     seq[T] = next_token
