@@ -53,6 +53,7 @@ class ModelArgs:
 
 transformer_configs = {
     "Mixtral-8x7B-v0.1": dict(block_size=32768, n_layer=32, n_head=32, n_local_heads=8, dim=4096, intermediate_size=14336, rope_base=1000000.0, num_experts=8, num_activated_experts=2),
+    "dbrx-base": dict(block_size=32768, n_layer=40, n_head=48, n_local_heads=8, dim=6144, intermediate_size=10752, rope_base=500000.0, num_experts=16, num_activated_experts=4, vocab_size=100352),
 }
 
 class KVCache(nn.Module):
