@@ -16,6 +16,8 @@ import torch._inductor.config
 def device_sync(device):
     if "cuda" in device:
         torch.cuda.synchronize(device)
+    elif "xpu" in device:
+        torch.xpu.synchronize(device)
     elif ("cpu" in device) or ("mps" in device):
         pass
     else:
@@ -24,7 +26,8 @@ def device_sync(device):
 
 torch._inductor.config.coordinate_descent_tuning = True
 torch._inductor.config.triton.unique_kernel_names = True
-torch._inductor.config.fx_graph_cache = True # Experimental feature to reduce compilation times, will be on by default in future
+if hasattr(torch._inductor.config, "fx_graph_cache"):
+    torch._inductor.config.fx_graph_cache = True # Experimental feature to reduce compilation times, will be on by default in future
 
 default_device = 'cuda' if torch.cuda.is_available() else 'cpu'
 
@@ -271,7 +274,7 @@ def main(
 
     global print
     from tp import maybe_init_dist
-    rank = maybe_init_dist()
+    rank = maybe_init_dist(device)
     use_tp = rank is not None
     if use_tp:
         if rank != 0:
@@ -303,7 +306,7 @@ def main(
     torch.manual_seed(1234)
     model_size = sum([p.numel() * p.dtype.itemsize for p in itertools.chain(model.parameters(), model.buffers())])
     if compile:
-        if is_speculative and use_tp: # and ("cuda" in device):
+        if is_speculative and use_tp and ("cuda" in device):
             torch._inductor.config.triton.cudagraph_trees = False # Bug with cudagraph trees in this case
 
         if is_speculative:
@@ -354,8 +357,15 @@ def main(
         if (i != num_samples - 1 or not profile) or (use_tp and rank != 0):
             prof = contextlib.nullcontext()
         else:
-            torch.profiler._utils._init_for_cuda_graphs()
-            prof = torch.profiler.profile()
+            if "cuda" in device:
+                torch.profiler._utils._init_for_cuda_graphs()
+                prof = torch.profiler.profile()
+            elif "xpu" in device:
+                prof = torch.profiler.profile(
+                    activities=[
+                    torch.profiler.ProfilerActivity.CPU,
+                    torch.profiler.ProfilerActivity.XPU],
+                )
         with prof:
             y, metrics = generate(
                 model,
@@ -419,6 +429,11 @@ if __name__ == '__main__':
     parser.add_argument('--device', type=str, default=default_device, help='Device to use')
 
     args = parser.parse_args()
+    if "xpu" in args.device:
+        try:
+            import intel_extension_for_pytorch as ipex
+        except:
+            raise ModuleNotFoundError(f"Intel Extension for PyTorch (intel_extension_for_pytorch) is required to run PyTorch code on Intel GPU (XPU). Please check https://github.com/intel/intel-extension-for-pytorch for details.")
     main(
         args.prompt, args.interactive, args.num_samples, args.max_new_tokens, args.top_k,
         args.temperature, args.checkpoint_path, args.compile, args.compile_prefill, args.profile, args.draft_checkpoint_path,
