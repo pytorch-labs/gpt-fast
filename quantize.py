@@ -539,7 +539,6 @@ def quantize(
     device: str = default_device,
 ) -> None:
     assert checkpoint_path.is_file(), checkpoint_path
-    device = 'cpu'
     precision = torch.bfloat16
 
     print("Loading model ...")
@@ -621,4 +620,9 @@ if __name__ == '__main__':
     parser.add_argument('--device', type=str, default=default_device, help='device to use')
 
     args = parser.parse_args()
+    if "xpu" in args.device:
+        try:
+            import intel_extension_for_pytorch as ipex
+        except:
+            raise ModuleNotFoundError(f"Intel Extension for PyTorch (intel_extension_for_pytorch) is required to run PyTorch code on Intel GPU (XPU). Please check https://github.com/intel/intel-extension-for-pytorch for details.")
     quantize(args.checkpoint_path, args.mode, args.groupsize, args.calibration_tasks, args.calibration_limit, args.calibration_seq_length, args.pad_calibration_inputs, args.percdamp, args.blocksize, args.label, args.device)
