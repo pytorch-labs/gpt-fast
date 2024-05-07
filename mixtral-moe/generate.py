@@ -174,8 +174,7 @@ def main(
     """
     assert checkpoint_path.is_file(), checkpoint_path
 
-    tokenizer_path = checkpoint_path.parent / "merges.txt"
-    assert tokenizer_path.is_file(), str(tokenizer_path)
+    tokenizer_path = checkpoint_path.parent / "tokenizer.model"
 
     global print
     rank = maybe_init_dist()

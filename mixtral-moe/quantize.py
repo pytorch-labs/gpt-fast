@@ -143,7 +143,7 @@ class ConditionalFeedForwardBit8(nn.Module):
 
 
 def quantize(
-    checkpoint_path: Path = Path("checkpoints/databricks/dbrx-base/model.path"),
+    checkpoint_path: Path = Path("checkpoints/mistralai/Mixtral-8x7B-v0.1/model.pth"),
     mode: str = 'int8',
     label: str = '',
 ) -> None:
@@ -184,7 +184,7 @@ def quantize(
 if __name__ == '__main__':
     import argparse
     parser = argparse.ArgumentParser(description='Quantize a model.')
-    parser.add_argument('--checkpoint_path', type=Path, default=Path("checkpoints/databricks/dbrx-base/model.path"), help='Path to the model checkpoint to be quantized.')
+    parser.add_argument('--checkpoint_path', type=Path, default=Path("checkpoints/meta-llama/Llama-2-7b-chat-hf/model.pth"), help='Path to the model checkpoint to be quantized.')
     parser.add_argument('--mode', '-q', type=str, default='int8', choices=['int8', 'int4', 'int4-gptq'], help='type of quantization to perform')
     parser.add_argument('--label', type=str, default='_', help='label to add to output filename')
 

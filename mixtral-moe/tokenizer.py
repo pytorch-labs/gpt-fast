@@ -8,7 +8,7 @@ from transformers import GPT2TokenizerFast
 
 class TokenizerInterface:
     def __init__(self, model_path):
-        self.model_path = model_path
+        self.model_path = os.path.join(model_path, "tokenizer.model")
 
     def encode(self, text):
         raise NotImplementedError("This method should be overridden by subclasses.")
@@ -25,7 +25,8 @@ class TokenizerInterface:
 class SentencePieceWrapper(TokenizerInterface):
     def __init__(self, model_path):
         super().__init__(model_path)
-        self.processor = spm.SentencePieceProcessor(str(model_path))
+        assert os.path.isfile(self.model_path), str(self.model_path)
+        self.processor = spm.SentencePieceProcessor(str(self.model_path))
 
     def encode(self, text):
         return self.processor.EncodeAsIds(text)
@@ -72,8 +73,8 @@ class TiktokenWrapper(TokenizerInterface):
 
     def __init__(self, model_path):
         super().__init__(model_path)
-        assert os.path.isfile(model_path), str(model_path)
-        mergeable_ranks = load_tiktoken_bpe(str(model_path))
+        assert os.path.isfile(self.model_path), str(self.model_path)
+        mergeable_ranks = load_tiktoken_bpe(str(self.model_path))
         num_base_tokens = len(mergeable_ranks)
         special_tokens = [
             "<|endoftext|>",
@@ -83,7 +84,7 @@ class TiktokenWrapper(TokenizerInterface):
             token: num_base_tokens + i for i, token in enumerate(special_tokens)
         }
         self.model = tiktoken.Encoding(
-            name=Path(model_path).name,
+            name=Path(self.model_path).name,
             pat_str=self.pat_str,
             mergeable_ranks=mergeable_ranks,
             special_tokens=self.special_tokens,
