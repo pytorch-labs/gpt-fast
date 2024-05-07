@@ -4,7 +4,7 @@ import tiktoken
 from tiktoken.load import load_tiktoken_bpe
 from pathlib import Path
 from typing import Dict
-from transformers import AutoTokenizer
+from transformers import GPT2TokenizerFast
 
 class TokenizerInterface:
     def __init__(self, model_path):
@@ -39,10 +39,13 @@ class SentencePieceWrapper(TokenizerInterface):
     def eos_id(self):
         return self.processor.eos_id()
 
-class AutoTokenizeWrapper(TokenizerInterface):
+class DBRXTokenizeWrapper(TokenizerInterface):
     def __init__(self, model_path):
         super().__init__(model_path)
-        self.processor = AutoTokenizer.from_pretrained("databricks/dbrx-base", token="")
+        vocab_file = os.path.join(model_path.parent, "vocab.json")
+        merges_file = os.path.join(model_path.parent, "merges.txt")
+        tokenizer_file = os.path.join(model_path.parent, "tokenizer.json")
+        self.processor = GPT2TokenizerFast(vocab_file, merges_file, tokenizer_file)
 
     def encode(self, text):
         return self.processor.encode(text)
@@ -115,6 +118,6 @@ def get_tokenizer(tokenizer_model_path, model_name):
     if "Llama-3" in str(model_name):
         return TiktokenWrapper(tokenizer_model_path)
     elif "dbrx" in str(model_name):
-        return AutoTokenizeWrapper(tokenizer_model_path)
+        return DBRXTokenizeWrapper(tokenizer_model_path)
     else:
         return SentencePieceWrapper(tokenizer_model_path)
