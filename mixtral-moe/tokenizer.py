@@ -55,10 +55,10 @@ class DBRXTokenizeWrapper(TokenizerInterface):
         return self.processor.decode(tokens)
 
     def bos_id(self):
-        return 100257
+        return self.processor.bos_token_id
 
     def eos_id(self):
-        return 100257
+        return self.processor.eos_token_id
 
 class TiktokenWrapper(TokenizerInterface):
     """
