@@ -160,7 +160,7 @@ if __name__ == '__main__':
         model_name = checkpoint_dir.name
 
     if "Mixtral-8x7B" in model_name:
-        return _convert_mixtral(checkpoint_dir, model_name)
+        _convert_mixtral(checkpoint_dir=checkpoint_dir, model_name=model_name)
     else:
         assert "dbrx" in model_name, f"Unknown model name {model_name}"
-        return _convert_dbrx(checkpoint_dir, model_name)
+        _convert_dbrx(checkpoint_dir=checkpoint_dir, model_name=model_name)

@@ -88,7 +88,10 @@ class Transformer(nn.Module):
 
         self.tok_embeddings = nn.Embedding(config.vocab_size, config.dim)
         self.layers = nn.ModuleList(TransformerBlock(config) for _ in range(config.n_layer))
-        self.norm = RMSNorm(config.dim, eps=config.norm_eps)
+        if is_dbrx(config):
+            self.norm = nn.LayerNorm(config.dim, eps=config.norm_eps, bias=False)
+        else:
+            self.norm = RMSNorm(config.dim, eps=config.norm_eps)
         self.output = nn.Linear(config.dim, config.vocab_size, bias=False)
 
         self.freqs_cis: Optional[Tensor] = None
@@ -261,16 +264,20 @@ def precompute_freqs_cis(
     return cache.to(dtype=torch.bfloat16)
 
 
-def apply_rotary_emb(x: Tensor, freqs_cis: Tensor) -> Tensor:
-    xshaped = x.float().reshape(*x.shape[:-1], -1, 2)
-    freqs_cis = freqs_cis.view(1, xshaped.size(1), 1, xshaped.size(3), 2)
-    x_out2 = torch.stack(
-        [
-            xshaped[..., 0] * freqs_cis[..., 0] - xshaped[..., 1] * freqs_cis[..., 1],
-            xshaped[..., 1] * freqs_cis[..., 0] + xshaped[..., 0] * freqs_cis[..., 1],
-        ],
-        -1,
-    )
+def rotate_half(x):
+    """Rotates half the hidden dims of the input."""
+    x1 = x[..., : x.shape[-1] // 2]
+    x2 = x[..., x.shape[-1] // 2 :]
+    return torch.cat((-x2, x1), dim=-1)
 
-    x_out2 = x_out2.flatten(3)
-    return x_out2.type_as(x)
+
+def apply_rotary_emb(x: Tensor, freqs_cis: Tensor) -> Tensor:
+    fc_shape = freqs_cis.shape
+    freqs_cis = freqs_cis.view(1, fc_shape[0], 1, fc_shape[1], fc_shape[2])
+    cos, sin = freqs_cis.split([1, 1], dim=-1)
+    cos = cos.squeeze(-1)
+    sin = sin.squeeze(-1)
+    cos = torch.cat((cos, cos), dim=-1)
+    sin = torch.cat((sin, sin), dim=-1)
+    z = (x * cos) + (rotate_half(x)) * sin
+    return z
