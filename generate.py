@@ -172,7 +172,7 @@ def generate(
     seq = empty
     input_pos = torch.arange(0, T, device=device)
 
-    next_token = prefill(model, prompt.view(1, -1), input_pos, **sampling_kwargs)
+    next_token = prefill(model, prompt.view(1, -1), input_pos, **sampling_kwargs).clone()
     if is_speculative:
         prefill(draft_model, prompt.view(1, -1), input_pos, **sampling_kwargs)
     seq[T] = next_token
@@ -225,12 +225,10 @@ def _load_model(checkpoint_path, device, precision, use_tp):
     if "int4" in str(checkpoint_path):
         print("Using int4 weight-only quantization!")
         path_comps = checkpoint_path.name.split(".")
-        assert path_comps[-3].startswith("g")
-        assert path_comps[-2] in device, "weight packed format mismatch, please rerun quantize.py!"
-        groupsize = int(path_comps[-3][1:])
+        groupsize = int(path_comps[-2][1:])
         from quantize import WeightOnlyInt4QuantHandler
         simple_quantizer = WeightOnlyInt4QuantHandler(model, groupsize)
-        model = simple_quantizer.convert_for_runtime(use_cuda)
+        model = simple_quantizer.convert_for_runtime()
 
     checkpoint = torch.load(str(checkpoint_path), mmap=True, weights_only=True)
     if "model" in checkpoint and "stories" in str(checkpoint_path):
