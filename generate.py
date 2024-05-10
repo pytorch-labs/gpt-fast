@@ -243,6 +243,18 @@ def _load_model(checkpoint_path, device, precision, use_tp):
     model = model.to(device=device, dtype=precision)
     return model.eval()
 
+def _get_model_size(model):
+    model_size = 0
+    for name, child in model.named_children():
+        if not isinstance(child, torch.nn.Embedding):
+            model_size += sum(
+                [
+                    p.numel() * p.dtype.itemsize
+                    for p in itertools.chain(child.parameters(), child.buffers())
+                ]
+            )
+    return model_size
+
 B_INST, E_INST = "[INST]", "[/INST]"
 
 def main(
@@ -299,7 +311,7 @@ def main(
     prompt_length = encoded.size(0)
 
     torch.manual_seed(1234)
-    model_size = sum([p.numel() * p.dtype.itemsize for p in itertools.chain(model.parameters(), model.buffers())])
+    model_size = _get_model_size(model)
     if compile:
         if is_speculative and use_tp: # and ("cuda" in device):
             torch._inductor.config.triton.cudagraph_trees = False # Bug with cudagraph trees in this case
