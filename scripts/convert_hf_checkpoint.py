@@ -9,7 +9,7 @@ import shutil
 import sys
 from pathlib import Path
 from typing import Optional
-
+from safetensors.torch import load_file as load_safetensors_file
 import torch
 
 # support running without installing as a package
@@ -32,9 +32,25 @@ def convert_hf_checkpoint(
     print(f"Model config {config.__dict__}")
 
     # Load the json file containing weight mapping
-    model_map_json = checkpoint_dir / "pytorch_model.bin.index.json"
-
-    assert model_map_json.is_file()
+    model_map_json_safetensors = checkpoint_dir / 'model.safetensors.index.json'
+    model_map_json_pytorch = checkpoint_dir / "pytorch_model.bin.index.json"
+    model_map_json = None
+   
+    try:
+      assert model_map_json_safetensors.is_file()
+      model_map_json = model_map_json_safetensors
+      print(f"Found safetensors index at {model_map_json_safetensors}")
+    except AssertionError:
+      print(f"{model_map_json_safetensors} not found")
+    if model_map_json is None:
+      try:
+        assert model_map_json_pytorch.is_file()
+        model_map_json = model_map_json_pytorch
+        print(f"Found pytorch index at {model_map_json_pytorch}")
+      except AssertionError:
+        print(f"{model_map_json_pytorch} not found")
+   
+    if model_map_json is None: raise Exception("No model map found!")
 
     with open(model_map_json) as json_map:
         bin_index = json.load(json_map)
@@ -66,8 +82,12 @@ def convert_hf_checkpoint(
 
     merged_result = {}
     for file in sorted(bin_files):
-        state_dict = torch.load(str(file), map_location="cpu", mmap=True, weights_only=True)
-        merged_result.update(state_dict)
+       if "safetensors" in str(file):
+           state_dict = load_safetensors_file(str(file), device="cpu")
+           merged_result.update(state_dict)
+       else:
+           state_dict = torch.load(str(file), map_location="cpu", mmap=True, weights_only=True)
+           merged_result.update(state_dict)
     final_result = {}
     for key, value in merged_result.items():
         if "layers" in key:
