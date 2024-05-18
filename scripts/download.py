@@ -17,7 +17,7 @@ def download_tinyllamas(repo_id: str, local_dir: str) -> None:
         weight_dst_path = os.path.join(local_dir, "model.pth")
         subprocess.run(["wget", weight_url, "-O", weight_dst_path], check=True)
         # Download tokenizer model
-        tokenizer_url = "https://github.com/karpathy/llama2.c/blob/master/tokenizer.model"
+        tokenizer_url = "https://github.com/karpathy/llama2.c/raw/master/tokenizer.model"
         tokenizer_dst_path: str = os.path.join(local_dir, "tokenizer.model")
         subprocess.run(["wget", tokenizer_url, "-O", tokenizer_dst_path], check=True)
     except subprocess.CalledProcessError as e:
