@@ -44,7 +44,7 @@ class ModelArgs:
         if name in transformer_configs:
             return cls(**transformer_configs[name])
         # fuzzy search
-        config = [config for config in transformer_configs if config.lower() in str(name).lower() or config.lower() in str(name).lower()]
+        config = [config for config in transformer_configs if config.lower() in str(name).lower()]
 
         # We may have two or more configs matched (e.g. "7B" and "Mistral-7B"). Find the best config match,
         # take longer name (as it have more symbols matched)
