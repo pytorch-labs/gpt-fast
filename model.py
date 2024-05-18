@@ -67,6 +67,7 @@ transformer_configs = {
     "stories15M": dict(n_layer=6, n_head=6, dim=288),
     "stories42M": dict(n_layer=8, n_head=8, dim=512, intermediate_size=1376),
     "stories110M": dict(n_layer=12, n_head=12, dim=768),
+    "Llama-3-8B": dict(block_size=8192, n_layer=32, n_head=32, n_local_heads=8, dim=4096, intermediate_size=14336, vocab_size=128256),
 }
 
 class KVCache(nn.Module):

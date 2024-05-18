@@ -148,12 +148,12 @@ python generate.py --compile --checkpoint_path checkpoints/$MODEL_REPO/model_int
 To generate int4 version of model
 ```bash
 # Spits out model at checkpoints/$MODEL_REPO/model_int4.g32.$DEVICE.pth
-python quantize.py --checkpoint_path checkpoints/$MODEL_REPO/model.pth --mode int4 --groupsize 32 --device $DEVICE
+python quantize.py --checkpoint_path checkpoints/$MODEL_REPO/model.pth --mode int4 --groupsize 32
 ```
 
 To run with int4, just pass the int4 checkpoint to generate.py.
 ```bash
-python generate.py --checkpoint_path checkpoints/$MODEL_REPO/model_int4.g32.$DEVICE.pth --compile --device $DEVICE
+python generate.py --checkpoint_path checkpoints/$MODEL_REPO/model_int4.g32.pth --compile
 ```
 
 ## Speculative Sampling

@@ -32,10 +32,8 @@ default_device = 'cuda' if torch.cuda.is_available() else 'cpu'
 wd = Path(__file__).parent.parent.resolve()
 sys.path.append(str(wd))
 
-from sentencepiece import SentencePieceProcessor
-
 from model import Transformer
-
+from tokenizer import get_tokenizer
 
 def multinomial_sample_one_no_sync(probs_sort): # Does multinomial sampling without a cuda synchronization
     q = torch.empty_like(probs_sort).exponential_(1)
@@ -174,7 +172,7 @@ def generate(
     seq = empty
     input_pos = torch.arange(0, T, device=device)
 
-    next_token = prefill(model, prompt.view(1, -1), input_pos, **sampling_kwargs)
+    next_token = prefill(model, prompt.view(1, -1), input_pos, **sampling_kwargs).clone()
     if is_speculative:
         prefill(draft_model, prompt.view(1, -1), input_pos, **sampling_kwargs)
     seq[T] = next_token
@@ -227,12 +225,10 @@ def _load_model(checkpoint_path, device, precision, use_tp):
     if "int4" in str(checkpoint_path):
         print("Using int4 weight-only quantization!")
         path_comps = checkpoint_path.name.split(".")
-        assert path_comps[-3].startswith("g")
-        assert path_comps[-2] in device, "weight packed format mismatch, please rerun quantize.py!"
-        groupsize = int(path_comps[-3][1:])
+        groupsize = int(path_comps[-2][1:])
         from quantize import WeightOnlyInt4QuantHandler
         simple_quantizer = WeightOnlyInt4QuantHandler(model, groupsize)
-        model = simple_quantizer.convert_for_runtime(use_cuda)
+        model = simple_quantizer.convert_for_runtime()
 
     checkpoint = torch.load(str(checkpoint_path), mmap=True, weights_only=True)
     if "model" in checkpoint and "stories" in str(checkpoint_path):
@@ -246,6 +242,18 @@ def _load_model(checkpoint_path, device, precision, use_tp):
 
     model = model.to(device=device, dtype=precision)
     return model.eval()
+
+def _get_model_size(model):
+    model_size = 0
+    for name, child in model.named_children():
+        if not isinstance(child, torch.nn.Embedding):
+            model_size += sum(
+                [
+                    p.numel() * p.dtype.itemsize
+                    for p in itertools.chain(child.parameters(), child.buffers())
+                ]
+            )
+    return model_size
 
 B_INST, E_INST = "[INST]", "[/INST]"
 
@@ -269,7 +277,7 @@ def main(
     assert checkpoint_path.is_file(), checkpoint_path
 
     tokenizer_path = checkpoint_path.parent / "tokenizer.model"
-    assert tokenizer_path.is_file(), tokenizer_path
+    assert tokenizer_path.is_file(), str(tokenizer_path)
 
     global print
     from tp import maybe_init_dist
@@ -297,12 +305,13 @@ def main(
     device_sync(device=device) # MKG
     print(f"Time to load model: {time.time() - t0:.02f} seconds")
 
-    tokenizer = SentencePieceProcessor(model_file=str(tokenizer_path))
+    tokenizer = get_tokenizer(tokenizer_path, checkpoint_path)
+
     encoded = encode_tokens(tokenizer, prompt, bos=True, device=device)
     prompt_length = encoded.size(0)
 
     torch.manual_seed(1234)
-    model_size = sum([p.numel() * p.dtype.itemsize for p in itertools.chain(model.parameters(), model.buffers())])
+    model_size = _get_model_size(model)
     if compile:
         if is_speculative and use_tp: # and ("cuda" in device):
             torch._inductor.config.triton.cudagraph_trees = False # Bug with cudagraph trees in this case

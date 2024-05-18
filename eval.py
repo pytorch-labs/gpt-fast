@@ -18,7 +18,7 @@ torch._inductor.config.epilogue_fusion = False
 torch._inductor.config.triton.cudagraphs = True
 torch._dynamo.config.cache_size_limit = 100000
 
-from sentencepiece import SentencePieceProcessor
+from tokenizer import get_tokenizer
 
 from model import Transformer
 
@@ -217,7 +217,7 @@ def main(
     assert checkpoint_path.is_file(), checkpoint_path
 
     tokenizer_path = checkpoint_path.parent / "tokenizer.model"
-    assert tokenizer_path.is_file(), tokenizer_path
+    assert tokenizer_path.is_file(), str(tokenizer_path)
 
     device = 'cuda'
     precision = torch.bfloat16
@@ -231,7 +231,7 @@ def main(
 
     model.eval()
 
-    tokenizer = SentencePieceProcessor(model_file=str(tokenizer_path))
+    tokenizer = get_tokenizer(tokenizer_path, checkpoint_path)
 
     torch.manual_seed(1234)
 
