@@ -14,9 +14,6 @@ This is *NOT* intended to be a "framework" or "library" - it is intended to show
 
 For an in-depth walkthrough of what's in this codebase, see this [blog post](https://pytorch.org/blog/accelerating-generative-ai-2/).
 
-## Examples
-In the spirit of keeping the repo minimal, here are various examples of extensions you can make to gpt-fast as PRs.
-- [Gemma support](https://github.com/pytorch-labs/gpt-fast/pull/115)
 ## Supported Models
 
 ### LLaMA family
@@ -33,6 +30,12 @@ We also supported [Mixtral 8x7B](https://mistral.ai/news/mixtral-of-experts/) wh
 Note that the benchmarks run on an 8xA100-80GB, power limited to 330W with a hybrid cube mesh topology. Note that all benchmarks are run at *batch size=1*, making the reported tokens/s numbers equivalent to "tokens/s/user". In addition, they are run with a very small prompt length (just 5 tokens).
 
 For more details about Mixtral 8x7B, please check [this page](./mixtral-moe) or this [note](https://thonking.substack.com/p/short-supporting-mixtral-in-gpt-fast).
+
+## Examples
+In the spirit of keeping the repo minimal, here are various examples of extensions you can make to gpt-fast as PRs.
+- [Google Gemma](https://github.com/pytorch-labs/gpt-fast/pull/115)
+- [xAI Grok-1](https://github.com/pytorch-labs/gpt-fast/pull/171)
+- [Databricks DBRX](https://github.com/pytorch-labs/gpt-fast/pull/174)
 
 ## Community
 
