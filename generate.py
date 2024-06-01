@@ -280,6 +280,7 @@ def main(
     compile_prefill: bool = False,
     profile: Optional[Path] = None,
     draft_checkpoint_path: Optional[Path] = None,
+    draft_early_exit: Optional[int] = None,
     speculate_k: int = 5,
     self_speculative: bool = False,
     early_exit: int = -1,
@@ -312,6 +313,9 @@ def main(
 
     if is_speculative:
         draft_model = _load_model(draft_checkpoint_path, device, precision, use_tp)
+        if draft_early_exit:
+            draft_model.layers = draft_model.layers[0:draft_early_exit]
+            draft_model.num_layers = draft_early_exit
     elif self_speculative:
         # Mean Accepted: 1.6445916114790287
         # Average tokens/sec: 58.78
@@ -454,6 +458,7 @@ if __name__ == '__main__':
     parser.add_argument('--profile', type=Path, default=None, help='Profile path.')
     parser.add_argument('--speculate_k', type=int, default=5, help='Speculative execution depth.')
     parser.add_argument('--draft_checkpoint_path', type=Path, default=None, help='Draft checkpoint path.')
+    parser.add_argument('--draft_early_exit', type=int, default=None, help='Early exit layer of draft model.')
     parser.add_argument('--self_speculative', action='store_true', help='Whether to use self speculative decoding')
     parser.add_argument('--early_exit', type=int, default=-1, help='The layer to exit early')
     parser.add_argument('--device', type=str, default=default_device, help='Device to use')
@@ -461,6 +466,6 @@ if __name__ == '__main__':
     args = parser.parse_args()
     main(
         args.prompt, args.interactive, args.num_samples, args.max_new_tokens, args.top_k,
-        args.temperature, args.checkpoint_path, args.compile, args.compile_prefill, args.profile, args.draft_checkpoint_path,
+        args.temperature, args.checkpoint_path, args.compile, args.compile_prefill, args.profile, args.draft_checkpoint_path, args.draft_early_exit,
         args.speculate_k, args.self_speculative, args.early_exit, args.device
     )
