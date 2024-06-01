@@ -99,7 +99,8 @@ class Transformer(nn.Module):
         self.freqs_cis: Optional[Tensor] = None
         self.mask_cache: Optional[Tensor] = None
         assert early_exit < len(self.layers), f"Early exit ({early_exit}) is more than Num layers ({len(self.num_layers)})"
-        self.num_layers = len(self.layers) if early_exit == -1 else early_exit
+        self.num_layers = len(self.layers)
+        self.early_num_layers = len(self.layers) if early_exit == -1 else early_exit
         self.max_batch_size = -1
         self.max_seq_length = -1
 
@@ -129,6 +130,19 @@ class Transformer(nn.Module):
         x = self.tok_embeddings(idx)
 
         for i in range(self.num_layers):
+            layer = self.layers[i]
+            x = layer(x, input_pos, freqs_cis, mask)
+        x = self.norm(x)
+        logits = self.output(x)
+        return logits
+
+    def forward_early(self, idx: Tensor, input_pos: Optional[Tensor] = None) -> Tensor:
+        assert self.freqs_cis is not None, "Caches must be initialized first"
+        mask = self.causal_mask[None, None, input_pos]
+        freqs_cis = self.freqs_cis[input_pos]
+        x = self.tok_embeddings(idx)
+
+        for i in range(self.early_num_layers):
             layer = self.layers[i]
             x = layer(x, input_pos, freqs_cis, mask)
         x = self.norm(x)

@@ -65,11 +65,17 @@ def decode_one_token(model: Transformer, x: torch.Tensor, input_pos: torch.Tenso
     logits = model(x, input_pos)
     return sample(logits, **sampling_kwargs)
 
+def decode_one_token_early(model: Transformer, x: torch.Tensor, input_pos: torch.Tensor, **sampling_kwargs) -> Tuple[torch.Tensor, torch.Tensor]:
+    # input_pos: [B, 1]
+    assert input_pos.shape[-1] == 1
+    logits = model.forward_early(x, input_pos)
+    return sample(logits, **sampling_kwargs)
+
 def decode_n_tokens(model: Transformer, cur_token: torch.Tensor, input_pos: torch.Tensor, num_new_tokens: int, callback=lambda _: _, **sampling_kwargs):
     new_tokens, new_probs = [], []
     for i in range(num_new_tokens):
         with torch.backends.cuda.sdp_kernel(enable_flash=False, enable_mem_efficient=False, enable_math=True): # Actually better for Inductor to codegen attention here
-            next_token, next_prob = decode_one_token(
+            next_token, next_prob = decode_one_token_early(
                 model, cur_token, input_pos, **sampling_kwargs
             )
             input_pos += 1
@@ -302,7 +308,14 @@ def main(
     if is_speculative:
         draft_model = _load_model(draft_checkpoint_path, device, precision, use_tp)
     elif self_speculative:
-        draft_model = _load_model(checkpoint_path, device, precision, use_tp, early_exit=early_exit)
+        # Mean Accepted: 1.6445916114790287
+        # Average tokens/sec: 58.78
+        # Memory used: 27.49 GB
+        # draft_model = _load_model(checkpoint_path, device, precision, use_tp, early_exit=early_exit)
+        # Mean Accepted: 9.3109243697479
+        # Average tokens/sec: 92.41
+        # Memory used: 13.89 GB
+        draft_model = model
         is_speculative = True
     else:
         draft_model = None
@@ -324,6 +337,10 @@ def main(
         if is_speculative:
             global model_forward, logits_to_prob
             model_forward = torch.compile(model_forward, mode="reduce-overhead", fullgraph=True)
+
+            if self_speculative:
+                global decode_one_token_early
+                decode_one_token_early = torch.compile(decode_one_token_early, mode="reduce-overhead", fullgraph=True)
 
         global decode_one_token, prefill
         decode_one_token = torch.compile(decode_one_token, mode="reduce-overhead", fullgraph=True)
