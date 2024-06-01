@@ -87,7 +87,7 @@ class KVCache(nn.Module):
         return k_out, v_out
 
 class Transformer(nn.Module):
-    def __init__(self, config: ModelArgs) -> None:
+    def __init__(self, config: ModelArgs, early_exit: int = -1) -> None:
         super().__init__()
         self.config = config
 
@@ -98,6 +98,8 @@ class Transformer(nn.Module):
 
         self.freqs_cis: Optional[Tensor] = None
         self.mask_cache: Optional[Tensor] = None
+        assert early_exit < len(self.layers), f"Early exit ({early_exit}) is more than Num layers ({len(self.num_layers)})"
+        self.num_layers = len(self.layers) if early_exit == -1 else early_exit
         self.max_batch_size = -1
         self.max_seq_length = -1
 
@@ -126,15 +128,16 @@ class Transformer(nn.Module):
         freqs_cis = self.freqs_cis[input_pos]
         x = self.tok_embeddings(idx)
 
-        for i, layer in enumerate(self.layers):
+        for i in range(self.num_layers):
+            layer = self.layers[i]
             x = layer(x, input_pos, freqs_cis, mask)
         x = self.norm(x)
         logits = self.output(x)
         return logits
 
     @classmethod
-    def from_name(cls, name: str):
-        return cls(ModelArgs.from_name(name))
+    def from_name(cls, name: str, early_exit: int):
+        return cls(ModelArgs.from_name(name), early_exit=early_exit)
 
 
 class TransformerBlock(nn.Module):
@@ -150,7 +153,12 @@ class TransformerBlock(nn.Module):
         out = h + self.feed_forward(self.ffn_norm(h))
         return out
 
-
+# Average tokens/sec: 109.89
+# Memory used: 13.88 GB
+# Average tokens/sec: 88.67
+# Memory used: 27.49 GB
+# Average tokens/sec: 109.68
+# Memory used: 27.49 GB
 class Attention(nn.Module):
     def __init__(self, config: ModelArgs):
         super().__init__()

@@ -211,10 +211,10 @@ def encode_tokens(tokenizer, string, bos=True, device=default_device):
         tokens = [tokenizer.bos_id()] + tokens
     return torch.tensor(tokens, dtype=torch.int, device=device)
 
-def _load_model(checkpoint_path, device, precision, use_tp):
+def _load_model(checkpoint_path, device, precision, use_tp, early_exit: int = -1):
     use_cuda = 'cuda' in device
     with torch.device('meta'):
-        model = Transformer.from_name(checkpoint_path.parent.name)
+        model = Transformer.from_name(checkpoint_path.parent.name, early_exit=early_exit)
 
     if "int8" in str(checkpoint_path):
         print("Using int8 weight-only quantization!")
@@ -270,6 +270,8 @@ def main(
     profile: Optional[Path] = None,
     draft_checkpoint_path: Optional[Path] = None,
     speculate_k: int = 5,
+    self_speculative: bool = False,
+    early_exit: int = -1,
     device=default_device,
 ) -> None:
     """Generates text samples based on a pre-trained Transformer model and tokenizer.
@@ -295,10 +297,13 @@ def main(
 
     print("Loading model ...")
     t0 = time.time()
-    model = _load_model(checkpoint_path, device, precision, use_tp)
+    model = _load_model(checkpoint_path, device, precision, use_tp, early_exit=early_exit if not self_speculative else -1)
 
     if is_speculative:
         draft_model = _load_model(draft_checkpoint_path, device, precision, use_tp)
+    elif self_speculative:
+        draft_model = _load_model(checkpoint_path, device, precision, use_tp, early_exit=early_exit)
+        is_speculative = True
     else:
         draft_model = None
 
@@ -401,6 +406,7 @@ def main(
         print(f"Bandwidth achieved: {model_size * tokens_sec / 1e9:.02f} GB/s")
     print("==========")
     if is_speculative:
+        print(aggregate_metrics)
         counts_aggregated = [sum(i) for i in zip(*aggregate_metrics['accept_counts'])]
         acceptance_probs = [i/sum(counts_aggregated) for i in counts_aggregated]
         print(f"Acceptance probs: {acceptance_probs}")
@@ -426,11 +432,13 @@ if __name__ == '__main__':
     parser.add_argument('--profile', type=Path, default=None, help='Profile path.')
     parser.add_argument('--speculate_k', type=int, default=5, help='Speculative execution depth.')
     parser.add_argument('--draft_checkpoint_path', type=Path, default=None, help='Draft checkpoint path.')
+    parser.add_argument('--self_speculative', action='store_true', help='Whether to use self speculative decoding')
+    parser.add_argument('--early_exit', type=int, default=-1, help='The layer to exit early')
     parser.add_argument('--device', type=str, default=default_device, help='Device to use')
 
     args = parser.parse_args()
     main(
         args.prompt, args.interactive, args.num_samples, args.max_new_tokens, args.top_k,
         args.temperature, args.checkpoint_path, args.compile, args.compile_prefill, args.profile, args.draft_checkpoint_path,
-        args.speculate_k, args.device
+        args.speculate_k, args.self_speculative, args.early_exit, args.device
     )
