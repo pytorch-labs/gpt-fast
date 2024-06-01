@@ -75,9 +75,14 @@ def decode_n_tokens(model: Transformer, cur_token: torch.Tensor, input_pos: torc
     new_tokens, new_probs = [], []
     for i in range(num_new_tokens):
         with torch.backends.cuda.sdp_kernel(enable_flash=False, enable_mem_efficient=False, enable_math=True): # Actually better for Inductor to codegen attention here
-            next_token, next_prob = decode_one_token_early(
-                model, cur_token, input_pos, **sampling_kwargs
-            )
+            if model.early_num_layers < model.num_layers:
+                next_token, next_prob = decode_one_token_early(
+                    model, cur_token, input_pos, **sampling_kwargs
+                )
+            else:
+                next_token, next_prob = decode_one_token(
+                    model, cur_token, input_pos, **sampling_kwargs
+                )
             input_pos += 1
             new_tokens.append(next_token.clone())
             callback(new_tokens[-1])
