@@ -40,18 +40,37 @@ def multinomial_sample_one_no_sync(probs_sort): # Does multinomial sampling with
     q = torch.empty_like(probs_sort).exponential_(1)
     return torch.argmax(probs_sort / q, dim=-1, keepdim=True).to(dtype=torch.int)
 
-def logits_to_probs(logits, temperature: float = 1.0, top_k: Optional[int] = None):
+def logits_to_probs(logits, temperature: float = 1.0, top_k: Optional[int] = None, top_p: Optional[float] = 1.0, filter_value: float = -float("Inf"), min_tokens_to_keep: int = 1):
     logits = logits / max(temperature, 1e-5)
 
     if top_k is not None:
         v, _ = torch.topk(logits, min(top_k, logits.size(-1)))
         pivot = v.select(-1, -1).unsqueeze(-1)
         logits = torch.where(logits < pivot, -float("Inf"), logits)
+
+    if top_p < 1.0:
+        sorted_logits, sorted_indices = torch.sort(logits, descending=True)
+        cumulative_probs = torch.cumsum(torch.nn.functional.softmax(sorted_logits, dim=-1), dim=-1)
+
+        # Remove tokens with cumulative probability above the threshold (token with 0 are kept)
+        sorted_indices_to_remove = cumulative_probs > top_p
+        if min_tokens_to_keep > 1:
+            # Keep at least min_tokens_to_keep (set to min_tokens_to_keep-1 because we add the first one below)
+            sorted_indices_to_remove[..., :min_tokens_to_keep] = 0
+        # Shift the indices to the right to keep also the first token above the threshold
+        sorted_indices_to_remove[..., 1:] = sorted_indices_to_remove[..., :-1].clone()
+        sorted_indices_to_remove[..., 0] = 0
+
+        # scatter sorted tensors to original indexing
+        indices_to_remove = sorted_indices_to_remove.scatter(-1, sorted_indices, sorted_indices_to_remove)
+        logits[indices_to_remove] = filter_value
+
     probs = torch.nn.functional.softmax(logits, dim=-1)
+
     return probs
 
-def sample(logits, temperature: float = 1.0, top_k: Optional[int] = None):
-    probs = logits_to_probs(logits[0, -1], temperature, top_k)
+def sample(logits, temperature: float = 1.0, top_k: Optional[int] = None, top_p: Optional[float] = 1.0):
+    probs = logits_to_probs(logits[0, -1], temperature, top_k, top_p)
     idx_next = multinomial_sample_one_no_sync(probs)
     return idx_next, probs
 
@@ -275,6 +294,7 @@ def main(
     num_samples: int = 5,
     max_new_tokens: int = 100,
     top_k: int = 200,
+    top_p: float = 1.0,
     temperature: float = 0.8,
     checkpoint_path: Path = Path("checkpoints/meta-Transformer/Transformer-2-7b-chat-hf/model.pth"),
     compile: bool = True,
@@ -410,6 +430,7 @@ def main(
                 callback=callback,
                 temperature=temperature,
                 top_k=top_k,
+                top_p=top_p,
             )
             aggregate_metrics['accept_counts'].append(metrics['accept_counts'])
         if i == -1:
@@ -459,7 +480,8 @@ if __name__ == '__main__':
     parser.add_argument('--interactive', action='store_true', help='Whether to launch in interactive mode')
     parser.add_argument('--num_samples', type=int, default=5, help='Number of samples.')
     parser.add_argument('--max_new_tokens', type=int, default=200, help='Maximum number of new tokens.')
-    parser.add_argument('--top_k', type=int, default=200, help='Top-k for sampling.')
+    parser.add_argument('--top_k', type=int, default=None, help='Top-k for sampling.')
+    parser.add_argument('--top_p', type=float, default=1.0, help='Top-p for sampling.')
     parser.add_argument('--temperature', type=float, default=0.8, help='Temperature for sampling.')
     parser.add_argument('--checkpoint_path', type=Path, default=Path("checkpoints/meta-Transformer/Transformer-2-7b-chat-hf/model.pth"), help='Model checkpoint path.')
     parser.add_argument('--compile', action='store_true', help='Whether to compile the model.')
@@ -475,7 +497,7 @@ if __name__ == '__main__':
 
     args = parser.parse_args()
     main(
-        args.prompt, args.interactive, args.num_samples, args.max_new_tokens, args.top_k,
+        args.prompt, args.interactive, args.num_samples, args.max_new_tokens, args.top_k, args.top_p,
         args.temperature, args.checkpoint_path, args.compile, args.compile_prefill, args.profile, args.draft_checkpoint_path, args.draft_early_exit,
         args.speculate_k, args.self_speculative, args.early_exit, args.device, args.log_file,
     )
