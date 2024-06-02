@@ -59,11 +59,18 @@ if __name__ == '__main__':
     for speculate_k in range(args.speculate_k_start, args.speculate_k_end+1):
         for draft_early_exit in range(args.draft_early_exit_start, args.draft_early_exit_end+1):
             log_file: Path = args.log_dir / f"{speculate_k}_{draft_early_exit}.json"
-            subprocess.check_call(
-                shlex.split(
-                    f"python generate.py --prompt=\"{prompts}\" {'--interactive' if args.interactive else ''} --num_samples={args.num_samples} --max_new_tokens={args.max_new_tokens} --top_k={args.top_k} --temperature={args.temperature} --checkpoint_path={args.checkpoint_path} {'--compile' if args.compile else ''} {'--compile_prefill' if args.compile_prefill else ''} {'--profile' if args.profile else ''} --draft_checkpoint_path={args.draft_checkpoint_path} --draft_early_exit={draft_early_exit} --speculate_k={speculate_k} {'--self_speculative' if args.self_speculative else ''} --early_exit={args.early_exit} --device={args.device} --log_file={log_file}"
+            if args.dataset:
+                subprocess.check_call(
+                    shlex.split(
+                        f"python benchmark.py --dataset={args.dataset} --n_shot={args.n_shot} {'--interactive' if args.interactive else ''} --num_samples={args.num_samples} --max_new_tokens={args.max_new_tokens} --top_k={args.top_k} --temperature={args.temperature} --checkpoint_path={args.checkpoint_path} {'--compile' if args.compile else ''} {'--compile_prefill' if args.compile_prefill else ''} {'--profile' if args.profile else ''} --draft_checkpoint_path={args.draft_checkpoint_path} --draft_early_exit={draft_early_exit} --speculate_k={speculate_k} {'--self_speculative' if args.self_speculative else ''} --early_exit={args.early_exit} --device={args.device} --log_file={log_file}"
+                    )
                 )
-            )
+            else:
+                subprocess.check_call(
+                    shlex.split(
+                        f"python generate.py --prompt=\"{args.prompt}\" {'--interactive' if args.interactive else ''} --num_samples={args.num_samples} --max_new_tokens={args.max_new_tokens} --top_k={args.top_k} --temperature={args.temperature} --checkpoint_path={args.checkpoint_path} {'--compile' if args.compile else ''} {'--compile_prefill' if args.compile_prefill else ''} {'--profile' if args.profile else ''} --draft_checkpoint_path={args.draft_checkpoint_path} --draft_early_exit={draft_early_exit} --speculate_k={speculate_k} {'--self_speculative' if args.self_speculative else ''} --early_exit={args.early_exit} --device={args.device} --log_file={log_file}"
+                    )
+                )
 
             aggregate_metrics = json.load(log_file.open())
 

@@ -30,6 +30,7 @@ if __name__ == '__main__':
     parser.add_argument('--self_speculative', action='store_true', help='Whether to use self speculative decoding')
     parser.add_argument('--early_exit', type=int, default=-1, help='The layer to exit early')
     parser.add_argument('--device', type=str, default=default_device, help='Device to use')
+    parser.add_argument('--log_file', type=Path, default=None, help='Path to log results')
 
     args = parser.parse_args()
 
@@ -38,5 +39,5 @@ if __name__ == '__main__':
     main(
         prompts, args.interactive, args.num_samples, args.max_new_tokens, args.top_k,
         args.temperature, args.checkpoint_path, args.compile, args.compile_prefill, args.profile, args.draft_checkpoint_path, args.draft_early_exit,
-        args.speculate_k, args.self_speculative, args.early_exit, args.device
+        args.speculate_k, args.self_speculative, args.early_exit, args.device, args.log_file
     )
