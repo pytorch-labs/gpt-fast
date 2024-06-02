@@ -4,6 +4,7 @@
 # This source code is licensed under the license found in the
 # LICENSE file in the root directory of this source tree.
 import itertools
+import json
 import sys
 import time
 from pathlib import Path
@@ -285,6 +286,7 @@ def main(
     self_speculative: bool = False,
     early_exit: int = -1,
     device=default_device,
+    log_file: Optional[Path] = None,
 ) -> None:
     """Generates text samples based on a pre-trained Transformer model and tokenizer.
     """
@@ -441,6 +443,13 @@ def main(
     print(f"Average tokens/sec: {torch.mean(torch.tensor(aggregate_metrics['tokens_per_sec'])).item():.2f}")
     print(f"Memory used: {torch.cuda.max_memory_reserved() / 1e9:.02f} GB")
 
+    if log_file:
+        # Save config and results to file
+        with open(log_file, "w") as f:
+            json.dump(aggregate_metrics, f)
+
+    return aggregate_metrics
+
 
 if __name__ == '__main__':
     import argparse
@@ -462,10 +471,11 @@ if __name__ == '__main__':
     parser.add_argument('--self_speculative', action='store_true', help='Whether to use self speculative decoding')
     parser.add_argument('--early_exit', type=int, default=-1, help='The layer to exit early')
     parser.add_argument('--device', type=str, default=default_device, help='Device to use')
+    parser.add_argument('--log_file', type=Path, default=None, help='Path to log results')
 
     args = parser.parse_args()
     main(
         args.prompt, args.interactive, args.num_samples, args.max_new_tokens, args.top_k,
         args.temperature, args.checkpoint_path, args.compile, args.compile_prefill, args.profile, args.draft_checkpoint_path, args.draft_early_exit,
-        args.speculate_k, args.self_speculative, args.early_exit, args.device
+        args.speculate_k, args.self_speculative, args.early_exit, args.device, args.log_file,
     )
