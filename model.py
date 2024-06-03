@@ -86,6 +86,21 @@ class KVCache(nn.Module):
 
         return k_out, v_out
 
+class EarlyExitQCache(nn.Module):
+    def __init__(self, max_batch_size, max_seq_length, dim, dtype=torch.bfloat16):
+        super().__init__()
+        cache_shape = (max_batch_size, max_seq_length, dim)
+        self.register_buffer('q_cache', torch.zeros(cache_shape, dtype=dtype))
+
+    def update(self, input_pos, q_val):
+        # input_pos: [S], k_val: [B, S, D]
+        assert input_pos.shape[0] == q_val.shape[1]
+
+        q_out = self.q_cache
+        q_out[:, input_pos] = q_val
+
+        return q_out
+
 class Transformer(nn.Module):
     def __init__(self, config: ModelArgs, early_exit: int = -1) -> None:
         super().__init__()
@@ -103,6 +118,7 @@ class Transformer(nn.Module):
         self.early_num_layers = len(self.layers) if early_exit == -1 else early_exit
         self.max_batch_size = -1
         self.max_seq_length = -1
+        self.q_cache = None
 
     def setup_caches(self, max_batch_size, max_seq_length):
         if self.max_seq_length >= max_seq_length and self.max_batch_size >= max_batch_size:
@@ -122,6 +138,7 @@ class Transformer(nn.Module):
 
         self.freqs_cis = precompute_freqs_cis(self.config.block_size, self.config.dim // self.config.n_head, self.config.rope_base, dtype)
         self.causal_mask = torch.tril(torch.ones(self.max_seq_length, self.max_seq_length, dtype=torch.bool))
+        self.q_cache = EarlyExitQCache(max_batch_size, max_seq_length, self.config.dim, dtype)
 
     def forward(self, idx: Tensor, input_pos: Optional[Tensor] = None) -> Tensor:
         assert self.freqs_cis is not None, "Caches must be initialized first"
@@ -132,6 +149,11 @@ class Transformer(nn.Module):
         for i in range(self.num_layers):
             layer = self.layers[i]
             x = layer(x, input_pos, freqs_cis, mask)
+            if i == (self.early_num_layers - 1):
+                # update the early exit cache with the input
+                # pos of the output layer to make sure
+                # q cache is filled from prefill step
+                self.q_cache.update(input_pos, x)
         x = self.norm(x)
         logits = self.output(x)
         return logits
@@ -145,6 +167,43 @@ class Transformer(nn.Module):
         for i in range(self.early_num_layers):
             layer = self.layers[i]
             x = layer(x, input_pos, freqs_cis, mask)
+        self.q_cache.update(input_pos, x)
+        x = self.norm(x)
+        logits = self.output(x)
+        return logits
+
+    # TODO: def forward_remainder (updates KVQ cache to use KV)
+    def forward_remainder(self, idx: Tensor, input_pos: Optional[Tensor] = None) -> Tensor:
+        # iterate over first N layers and predict only the last token
+        # iterate over the last N layers and do the full remainder pass
+        # make sure we update the Q cache in this process
+        assert self.freqs_cis is not None, "Caches must be initialized first"
+        mask = self.causal_mask[None, None, input_pos]
+        freqs_cis = self.freqs_cis[input_pos]
+        x = self.tok_embeddings(idx) # (bsz, seq, hidden_dim)
+
+        # early exit should only be the last token
+        early_input_pos = input_pos[-1:]
+        early_input_x = x[:, -1:] # only embeding for the last token
+        early_freq_cis = freqs_cis[-1:]
+        early_mask = mask[:, :, -1:]
+
+        for i in range(self.early_num_layers):
+            # early exit pass
+            layer = self.layers[i]
+            early_input_x = layer(early_input_x, early_input_pos, early_freq_cis, early_mask)
+
+        # save the query for the latest token
+        self.q_cache.update(early_input_pos, early_input_x)
+
+        # concatenate early exit query cache with the newly computed token
+        # for the remaining layers
+        cached_queries = self.q_cache.q_cache[:, input_pos[:-1]]
+        x = torch.cat((cached_queries, early_input_x), dim=1)
+        for i in range(self.early_num_layers, self.num_layers):
+            # remainder pass
+            layer = self.layers[i]
+            x = layer(x, input_pos, freq_cis, mask)
         x = self.norm(x)
         logits = self.output(x)
         return logits
