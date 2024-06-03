@@ -90,6 +90,61 @@ def decode_n_tokens(model: Transformer, cur_token: torch.Tensor, input_pos: torc
 def model_forward(model, x, input_pos):
     return model(x, input_pos)
 
+def forward_remainder(model, x, input_pos):
+    return model.forward_remainder(x, input_pos)
+
+def forward_early(model, x, input_pos):
+    return model.forward_early(x, input_pos)
+
+def self_speculative_decode(
+    model: Transformer,
+    cur_token: torch.Tensor,
+    input_pos: int,
+    speculate_k: int,
+    **sampling_kwargs
+) -> torch.Tensor:
+    # draft model inference sequentially
+    device = cur_token.device
+    orig_input_pos = torch.tensor([input_pos], dtype=torch.int64, device=cur_token.device)
+    draft_tokens, draft_probs = decode_n_tokens(model, cur_token.view(1, -1), orig_input_pos.clone(), speculate_k, **sampling_kwargs)
+
+    draft_tokens = torch.cat(draft_tokens)
+    # parallel inference on target model using draft tokens
+    target_logits = forward_remainder(
+        model,
+        torch.cat([cur_token.view(1), draft_tokens]).view(1, -1),
+        torch.arange(input_pos, input_pos + speculate_k + 1, device=cur_token.device)
+    )
+    target_probs = logits_to_probs(target_logits[0], **sampling_kwargs)
+    draft_probs = torch.stack(draft_probs)
+    # q: target prob, p: draft prob
+    # q >= p: always accept draft token
+    # q < p: q/p prob to accept draft token
+    p = draft_probs[torch.arange(0, speculate_k, device=device), draft_tokens]
+    q = target_probs[torch.arange(0, speculate_k, device=device), draft_tokens]
+    accept_draft_prob = torch.minimum(torch.ones(()), q[:speculate_k]/ p)
+    rejected_locations = (torch.rand_like(accept_draft_prob) > accept_draft_prob).nonzero()
+
+    if rejected_locations.shape[0] == 0: # All draft tokens have been accepted
+        accept_length = speculate_k + 1
+        last_token = multinomial_sample_one_no_sync(target_probs[-1])
+        # fill last token into draft model
+        forward_early(
+            model,
+            draft_tokens[-1].view(1, -1),
+            orig_input_pos + speculate_k,
+        )
+        return torch.cat([draft_tokens, last_token])
+    else:
+        accept_length = rejected_locations[0].item()
+        p = draft_probs[accept_length]
+        q = target_probs[accept_length]
+        new = q - p
+        new = torch.where(new > 0, new, 0.0)
+        new = new / new.sum()
+        next_token = multinomial_sample_one_no_sync(new)
+        return torch.cat([draft_tokens[:accept_length], next_token])
+
 def speculative_decode(
     model: Transformer,
     draft_model: Transformer,
@@ -149,6 +204,7 @@ def generate(
     interactive: bool,
     draft_model: Transformer,
     speculate_k: Optional[int] = 8,
+    is_self_speculative: bool = False,
     callback = lambda x: x,
     **sampling_kwargs
 ) -> torch.Tensor:
@@ -191,9 +247,14 @@ def generate(
         while input_pos < T_new - 1:
             cur_token = next_token.view(())
 
-            next_tokens = speculative_decode(
-                model, draft_model, cur_token, input_pos, speculate_k, **sampling_kwargs
-            )
+            if is_self_speculative:
+                next_tokens = self_speculative_decode(
+                    model, cur_token, input_pos, speculate_k, **sampling_kwargs
+                )
+            else:
+                next_tokens = speculative_decode(
+                    model, draft_model, cur_token, input_pos, speculate_k, **sampling_kwargs
+                )
 
             accept_counts[len(next_tokens) - 1] += 1
             num_added = min(T_new - input_pos - 1, len(next_tokens))
@@ -338,9 +399,12 @@ def main(
             global model_forward, logits_to_prob
             model_forward = torch.compile(model_forward, mode="reduce-overhead", fullgraph=True)
 
-            if self_speculative:
-                global decode_one_token_early
-                decode_one_token_early = torch.compile(decode_one_token_early, mode="reduce-overhead", fullgraph=True)
+            global decode_one_token_early
+            decode_one_token_early = torch.compile(decode_one_token_early, mode="reduce-overhead", fullgraph=True)
+            global forward_remainder
+            forward_remainder = torch.compile(forward_remainder, mode="reduce-overhead", fullgraph=True)
+            global forward_early
+            forward_early = torch.compile(forward_early, mode="reduce-overhead", fullgraph=True)
 
         global decode_one_token, prefill
         decode_one_token = torch.compile(decode_one_token, mode="reduce-overhead", fullgraph=True)
@@ -398,6 +462,7 @@ def main(
                 interactive=interactive,
                 callback=callback,
                 temperature=temperature,
+                is_self_speculative=self_speculative,
                 top_k=top_k,
             )
             aggregate_metrics['accept_counts'].append(metrics['accept_counts'])
