@@ -389,11 +389,12 @@ def main(
 
     for i in range(start, num_samples):
         device_sync(device=device) # MKG
-        if i >= 0 and interactive:
+        if i >= 0 and (interactive or isinstance(prompt, List)):
             prompt = prompt[i] if isinstance(prompt, List) else input("What is your prompt? ")
             if is_chat:
                 prompt = f"{B_INST} {prompt.strip()} {E_INST}"
             encoded = encode_tokens(tokenizer, prompt, bos=True, device=device)
+            prompt_length = encoded.size(0)
 
         if interactive and i >= 0:
             buffer = []
