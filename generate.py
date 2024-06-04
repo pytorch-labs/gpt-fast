@@ -335,7 +335,7 @@ def main(
 
     if is_speculative:
         draft_model = _load_model(draft_checkpoint_path, device, precision, use_tp)
-        if draft_early_exit:
+        if draft_early_exit is not None and draft_early_exit > -1:
             draft_model.layers = draft_model.layers[0:draft_early_exit]
             draft_model.num_layers = draft_early_exit
     elif self_speculative:
