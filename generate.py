@@ -364,7 +364,7 @@ def main(
 
     print("Loading model ...")
     t0 = time.time()
-    model = _load_model(checkpoint_path, device, precision, use_tp, early_exit=early_exit if not self_speculative else -1)
+    model = _load_model(checkpoint_path, device, precision, use_tp, early_exit=early_exit if self_speculative else -1)
 
     if is_speculative:
         draft_model = _load_model(draft_checkpoint_path, device, precision, use_tp)
