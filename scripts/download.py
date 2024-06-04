@@ -9,11 +9,11 @@ from typing import Optional
 from requests.exceptions import HTTPError
 
 
-def hf_download(repo_id: Optional[str] = None, hf_token: Optional[str] = None) -> None:
+def hf_download(repo_id: Optional[str] = None, hf_token: Optional[str] = None, root_dir: Optional[str] = "checkpoints") -> None:
     from huggingface_hub import snapshot_download
-    os.makedirs(f"checkpoints/{repo_id}", exist_ok=True)
+    os.makedirs(f"{root_dir}/{repo_id}", exist_ok=True)
     try:
-        snapshot_download(repo_id, local_dir=f"checkpoints/{repo_id}", local_dir_use_symlinks=False, token=hf_token)
+        snapshot_download(repo_id, local_dir=f"{root_dir}/{repo_id}", local_dir_use_symlinks=False, token=hf_token)
     except HTTPError as e:
         if e.response.status_code == 401:
             print("You need to pass a valid `--hf_token=...` to download private checkpoints.")
@@ -23,8 +23,9 @@ def hf_download(repo_id: Optional[str] = None, hf_token: Optional[str] = None) -
 if __name__ == '__main__':
     import argparse
     parser = argparse.ArgumentParser(description='Download data from HuggingFace Hub.')
-    parser.add_argument('--repo_id', type=str, default="checkpoints/meta-llama/llama-2-7b-chat-hf", help='Repository ID to download from.')
+    parser.add_argument('--repo_id', type=str, default="meta-llama/llama-2-7b-chat-hf", help='Repository ID to download from.')
     parser.add_argument('--hf_token', type=str, default=None, help='HuggingFace API token.')
+    parser.add_argument('--root_dir', type=str, default="checkpoint", help='Base dir to store checkpoints')
 
     args = parser.parse_args()
-    hf_download(args.repo_id, args.hf_token)
+    hf_download(args.repo_id, args.hf_token, args.root_dir)
