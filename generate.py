@@ -464,6 +464,7 @@ def main(
 
     print(f"Average tokens/sec: {torch.mean(torch.tensor(aggregate_metrics['tokens_per_sec'])).item():.2f}")
     print(f"Memory used: {torch.cuda.max_memory_reserved() / 1e9:.02f} GB")
+    aggregate_metrics["memory_used"] = torch.cuda.max_memory_reserved()
 
     if log_file:
         # Save config and results to file

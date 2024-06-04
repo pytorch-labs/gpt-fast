@@ -41,6 +41,7 @@ if __name__ == '__main__':
     parser.add_argument('--self_speculative', action='store_true', help='Whether to use self speculative decoding')
     parser.add_argument('--early_exit', type=int, default=-1, help='The layer to exit early')
     parser.add_argument('--device', type=str, default=default_device, help='Device to use')
+    parser.add_argument('--sample_warmup', type=int, default=0, help='Number of samples at the beginning to skip when calculating average tokens per second')
 
     args = parser.parse_args()
 
@@ -74,14 +75,15 @@ if __name__ == '__main__':
                 )
 
             aggregate_metrics = json.load(log_file.open())
+            log_file.unlink()
 
             if is_speculative:
                 counts_aggregated = [sum(i) for i in zip(*aggregate_metrics['accept_counts'])]
                 acceptance_probs = [i/sum(counts_aggregated) for i in counts_aggregated]
                 mean_accepted = {sum([idx * i for idx, i in enumerate(counts_aggregated)])/sum(counts_aggregated)}
 
-            average_tokens_per_second = torch.mean(torch.tensor(aggregate_metrics['tokens_per_sec'])).item()
-            memory_used = torch.cuda.max_memory_reserved() / 1e9
+            average_tokens_per_second = torch.mean(torch.tensor(aggregate_metrics['tokens_per_sec'][args.sample_warmup:])).item()
+            memory_used = aggregate_metrics["memory_used"] / 1e9
 
             results.append({
                 "speculate_k": speculate_k,
