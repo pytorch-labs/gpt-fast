@@ -203,7 +203,7 @@ class Transformer(nn.Module):
         for i in range(self.early_num_layers, self.num_layers):
             # remainder pass
             layer = self.layers[i]
-            x = layer(x, input_pos, freq_cis, mask)
+            x = layer(x, input_pos, freqs_cis, mask)
         x = self.norm(x)
         logits = self.output(x)
         return logits
