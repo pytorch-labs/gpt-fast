@@ -211,7 +211,7 @@ class ConditionalFeedForward(nn.Module):
         w1_weights = self.w1[expert_indices] # [T, A, D, D]
         w3_weights = self.w3[expert_indices] # [T, A, D, D]
         w2_weights = self.w2[expert_indices]  # [T, A, D, D]
-        x1 = F.silu(torch.einsum('ti,taoi -> tao', x, w1_weights))
+        x1 = F.gelu(torch.einsum('ti,taoi -> tao', x, w1_weights))
         x3 = torch.einsum('ti, taoi -> tao', x, w3_weights)
         expert_outs =  torch.einsum('tao, taio -> tai', (x1 * x3), w2_weights)
         return expert_outs
