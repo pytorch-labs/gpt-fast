@@ -156,9 +156,9 @@ class Attention(nn.Module):
         super().__init__()
         assert config.dim % config.n_head == 0
 
-        total_head_dim = (config.n_head + 2 * config.n_local_heads) * config.head_dim
-        # key, query, value projections for all heads, but in a batch
-        self.wqkv = nn.Linear(config.dim, total_head_dim, bias=False)
+        self.wq = nn.Linear(config.dim, config.n_head * config.head_dim, bias=False)
+        self.wk = nn.Linear(config.dim, config.n_local_heads * config.head_dim, bias=False)
+        self.wv = nn.Linear(config.dim, config.n_local_heads * config.head_dim, bias=False)
         self.wo = nn.Linear(config.dim, config.dim, bias=False)
         self.kv_cache = None
 
@@ -166,20 +166,12 @@ class Attention(nn.Module):
         self.head_dim = config.head_dim
         self.n_local_heads = config.n_local_heads
         self.dim = config.dim
-        self._register_load_state_dict_pre_hook(self.load_hook)
-
-    def load_hook(self, state_dict, prefix, *args):
-        if prefix + "wq.weight" in state_dict:
-            wq = state_dict.pop(prefix + "wq.weight")
-            wk = state_dict.pop(prefix + "wk.weight")
-            wv = state_dict.pop(prefix + "wv.weight")
-            state_dict[prefix + "wqkv.weight"] = torch.cat([wq, wk, wv])
 
     def forward(self, x: Tensor, freqs_cis: Tensor, mask: Tensor, input_pos: Optional[Tensor] = None) -> Tensor:
         bsz, seqlen, _ = x.shape
 
         kv_size = self.n_local_heads * self.head_dim
-        q, k, v = self.wqkv(x).split([self.dim, kv_size, kv_size], dim=-1)
+        q, k, v = self.wq(x), self.wk(x), self.wv(x)
 
         q = q.view(bsz, seqlen, self.n_head, self.head_dim)
         k = k.view(bsz, seqlen, self.n_local_heads, self.head_dim)

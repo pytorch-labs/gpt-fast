@@ -83,7 +83,7 @@ def convert_hf_checkpoint(
         original_dir = checkpoint_dir / "original"
         pattern = re.compile(r"^consolidated\.\d{2}\.pth$")
         bin_files = {bin for bin in original_dir.iterdir() if pattern.match(bin.name)}
-        
+
 
     def permute(w, n_head):
         dim = config.dim
@@ -116,13 +116,8 @@ def convert_hf_checkpoint(
             if "wq" in key:
                 q = final_result[key]
                 k = final_result[key.replace("wq", "wk")]
-                v = final_result[key.replace("wq", "wv")]
-                q = permute(q, config.n_head)
-                k = permute(k, config.n_local_heads)
-                final_result[key.replace("wq", "wqkv")] = torch.cat([q, k, v])
-                del final_result[key]
-                del final_result[key.replace("wq", "wk")]
-                del final_result[key.replace("wq", "wv")]
+                final_result[key] = permute(q, config.n_head)
+                final_result[key.replace("wq", "wk")] = permute(k, config.n_local_heads)
     else:
         final_result = merged_result
     print(f"Saving checkpoint to {checkpoint_dir / 'model.pth'}")
