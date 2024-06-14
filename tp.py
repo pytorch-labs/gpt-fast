@@ -18,6 +18,12 @@ else:
 from model import Attention, FeedForward, Transformer
 from quantize import WeightOnlyInt4Linear
 
+Int4Device = "cpu"
+
+def global_device(device: str = "cpu"):
+    global Int4Device
+    Int4Device = device
+
 
 def _get_rank() -> int:
     return int(os.environ.get("LOCAL_RANK", "0"))
@@ -33,7 +39,7 @@ def local_break():
 def _get_world_size() -> int:
     return int(os.environ.get("LOCAL_WORLD_SIZE", "1"))
 
-def maybe_init_dist() -> Optional[int]:
+def maybe_init_dist(device) -> Optional[int]:
     try:
         # provided by torchrun
         rank = _get_rank()
@@ -46,8 +52,21 @@ def maybe_init_dist() -> Optional[int]:
         # not run via torchrun, no-op
         return None
 
-    torch.cuda.set_device(rank)
-    dist.init_process_group(backend="nccl", rank=rank, world_size=world_size)
+    if "cuda" in device:
+        torch.cuda.set_device(rank)
+        dist.init_process_group(backend="nccl", rank=rank, world_size=world_size)
+    elif "xpu" in device:
+        try:
+            import oneccl_bindings_for_pytorch
+        except:
+            raise ModuleNotFoundError(f"OneCCL bindings for PyTorch (oneccl_bindings_for_pytorch) is required to run tensor parallel on Intel GPU (XPU). Please check https://github.com/intel/torch-ccl for details.")
+
+        os.environ['CCL_PROCESS_LAUNCHER'] = 'none'
+        os.environ['CCL_LOCAL_SIZE'] = str(world_size)
+        os.environ['CCL_LOCAL_RANK'] = str(rank)
+
+        torch.xpu.set_device(rank)
+        dist.init_process_group(backend="ccl", rank=rank, world_size=world_size)
     return rank
 
 
@@ -83,14 +102,32 @@ def _apply_tp_linear(linear: nn.Linear, style: str, weight_splits: List[int] = [
         assert len(weight_splits) == 3
 
         if isinstance(linear, WeightOnlyInt4Linear):
-            sharded_weight = shard_qkv(linear.weight, shard_dim, [i//8 for i in weight_splits])
+            if ("xpu" in Int4Device):
+                in_features = linear.in_features
+                out_features = linear.out_features//8
+                sharded_weight_size = list(linear.weight.size())
+                sharded_weight_size[shard_dim] = -1
+                weight = linear.weight.reshape((in_features, out_features))
+                sharded_weight = shard_qkv(weight, 1 - shard_dim, [i//8 for i in weight_splits])
+                sharded_weight = sharded_weight.reshape(sharded_weight_size)
+            else:
+                sharded_weight = shard_qkv(linear.weight, shard_dim, [i//8 for i in weight_splits])
             linear.scales_and_zeros = shard_qkv(linear.scales_and_zeros, 1 - shard_dim, weight_splits)
         else:
             sharded_weight = shard_qkv(linear.weight, shard_dim, weight_splits)
         if hasattr(linear, "scales") and style == "colwise":
             linear.scales = shard_qkv(linear.scales, 0, weight_splits)
     else:
-        sharded_weight = shard(linear.weight, shard_dim)
+        if isinstance(linear, WeightOnlyInt4Linear) and ("xpu" in Int4Device):
+            in_features = linear.in_features
+            out_features = linear.out_features//8
+            sharded_weight_size = list(linear.weight.size())
+            sharded_weight_size[shard_dim] = -1
+            weight = linear.weight.reshape((in_features, out_features))
+            sharded_weight = shard(weight, 1 - shard_dim)
+            sharded_weight = sharded_weight.reshape(sharded_weight_size)
+        else:
+            sharded_weight = shard(linear.weight, shard_dim)
         if isinstance(linear, WeightOnlyInt4Linear):
             linear.scales_and_zeros = shard(linear.scales_and_zeros, 1 - shard_dim)
             if style == "rowwise":
