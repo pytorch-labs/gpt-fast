@@ -209,7 +209,7 @@ class Transformer(nn.Module):
         return logits
 
     @classmethod
-    def from_name(cls, name: str, early_exit: int):
+    def from_name(cls, name: str, early_exit: int = -1):
         return cls(ModelArgs.from_name(name), early_exit=early_exit)
 
 
