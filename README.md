@@ -89,8 +89,8 @@ Benchmarks run on an 8xA100-80GB, power limited to 330W with a hybrid cube mesh 
 | Llama-2-70B | Base    | OOM     ||
 |           | 8-bit   | 19.13    | 1322.58 |
 |           | 4-bit (G=32)   | 25.25    | 1097.66 |
-| Llama-3-8B  | Base    |  93.95  | 1508.18 |
-|           | 8-bit   | 114.35   | 978.02 |
+| Llama-3-8B  | Base    |  94.25  | 1411.95 |
+|           | 8-bit   | 139.55   | 1047.23 |
 
 ### Speculative Sampling
 [Verifier: Llama-70B (int4), Draft: Llama-7B (int4)](./scripts/speculate_70B_int4.sh): 48.4 tok/s
@@ -106,10 +106,10 @@ Benchmarks run on an 8xA100-80GB, power limited to 330W with a hybrid cube mesh 
 |           | 2   | 21.32   | 1481.87 |
 |           | 4   | 38.01   | 1340.76 |
 |           | 8   | 62.50   | 1135.29 |
-| Llama-3-8B  | 1    |  93.97  | 1508.46 |
-|           | 2   | 149.44   | 1358.63 |
-|           | 4   | 217.80   | 1218.76 |
-|           | 8   | 271.03   | 1041.99 |
+| Llama-3-8B  | 1    |  94.19  | 1411.76 |
+|           | 2   | 150.48   | 1208.80 |
+|           | 4   | 219.77   | 991.63 |
+|           | 8   | 274.65   | 768.55 |
 
 ### Tensor Parallelism + Quantization
 | Model    | Technique | Tokens/Second | Memory Bandwidth (GB/s) |
