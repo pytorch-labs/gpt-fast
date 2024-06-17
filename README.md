@@ -70,6 +70,7 @@ codellama/CodeLlama-34b-Python-hf
 mistralai/Mistral-7B-v0.1
 mistralai/Mistral-7B-Instruct-v0.1
 mistralai/Mistral-7B-Instruct-v0.2
+meta-llama/Meta-Llama-3-8B
 ```
 
 For example, to convert Llama-2-7b-chat-hf
