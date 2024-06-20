@@ -532,6 +532,8 @@ def main(
     aggregate_metrics["memory_used"] = torch.cuda.max_memory_reserved()
 
     if log_file:
+        # Create parent directory if needed
+        log_file.parents[0].mkdir(parents=True, exist_ok=True)
         # Save config and results to file
         with open(log_file, "w") as f:
             json.dump(aggregate_metrics, f)
