@@ -1,3 +1,7 @@
+# ATOM
+Accelerating Transformers by Order(s) of Magnitude.
+This codebase is based on [gpt-fast](https://github.com/pytorch-labs/gpt-fast).
+
 # gpt-fast
 Simple and efficient pytorch-native transformer text generation.
 
