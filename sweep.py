@@ -64,13 +64,13 @@ if __name__ == '__main__':
             if args.dataset:
                 subprocess.check_call(
                     shlex.split(
-                        f"python benchmark.py --dataset={args.dataset} --n_shot={args.n_shot} {'--interactive' if args.interactive else ''} --num_samples={args.num_samples} --max_new_tokens={args.max_new_tokens} --top_k={args.top_k} --top_p={args.top_p} --temperature={args.temperature} --checkpoint_path={args.checkpoint_path} {'--compile' if args.compile else ''} {'--compile_prefill' if args.compile_prefill else ''} {'--profile' if args.profile else ''} --draft_checkpoint_path={args.draft_checkpoint_path} --draft_early_exit={draft_early_exit} --speculate_k={speculate_k} {'--self_speculative' if args.self_speculative else ''} --early_exit={args.early_exit} --device={args.device} --log_file={log_file}"
+                        f"python benchmark.py --dataset={args.dataset} --n_shot={args.n_shot} {'--interactive' if args.interactive else ''} --num_samples={args.num_samples} --max_new_tokens={args.max_new_tokens} {'--top_k='+str(args.top_k) if args.top_k else ''} --top_p={args.top_p} --temperature={args.temperature} --checkpoint_path={args.checkpoint_path} {'--compile' if args.compile else ''} {'--compile_prefill' if args.compile_prefill else ''} {'--profile' if args.profile else ''} --draft_checkpoint_path={args.draft_checkpoint_path} --draft_early_exit={draft_early_exit} --speculate_k={speculate_k} {'--self_speculative' if args.self_speculative else ''} --early_exit={args.early_exit} --device={args.device} --log_file={log_file}"
                     )
                 )
             else:
                 subprocess.check_call(
                     shlex.split(
-                        f"python generate.py --prompt=\"{args.prompt}\" {'--interactive' if args.interactive else ''} --num_samples={args.num_samples} --max_new_tokens={args.max_new_tokens} --top_k={args.top_k} --top_p={args.top_p} --temperature={args.temperature} --checkpoint_path={args.checkpoint_path} {'--compile' if args.compile else ''} {'--compile_prefill' if args.compile_prefill else ''} {'--profile' if args.profile else ''} --draft_checkpoint_path={args.draft_checkpoint_path} --draft_early_exit={draft_early_exit} --speculate_k={speculate_k} {'--self_speculative' if args.self_speculative else ''} --early_exit={args.early_exit} --device={args.device} --log_file={log_file}"
+                        f"python generate.py --prompt=\"{args.prompt}\" {'--interactive' if args.interactive else ''} --num_samples={args.num_samples} --max_new_tokens={args.max_new_tokens} {'--top_k='+str(args.top_k) if args.top_k else ''} --top_p={args.top_p} --temperature={args.temperature} --checkpoint_path={args.checkpoint_path} {'--compile' if args.compile else ''} {'--compile_prefill' if args.compile_prefill else ''} {'--profile' if args.profile else ''} --draft_checkpoint_path={args.draft_checkpoint_path} --draft_early_exit={draft_early_exit} --speculate_k={speculate_k} {'--self_speculative' if args.self_speculative else ''} --early_exit={args.early_exit} --device={args.device} --log_file={log_file}"
                     )
                 )
 
