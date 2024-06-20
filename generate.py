@@ -350,7 +350,7 @@ def _get_model_size(model):
 B_INST, E_INST = "[INST]", "[/INST]"
 
 def main(
-    prompt: Union[str, List[str]] = "Hello, my name is",
+    prompts: Union[str, List[str]] = "Hello, my name is",
     interactive: bool = False,
     num_samples: int = 5,
     max_new_tokens: int = 100,
@@ -417,7 +417,7 @@ def main(
 
     tokenizer = get_tokenizer(tokenizer_path, checkpoint_path)
 
-    encoded = encode_tokens(tokenizer, prompt[0] if isinstance(prompt, List) else prompt, bos=True, device=device)
+    encoded = encode_tokens(tokenizer, prompts[0] if isinstance(prompts, List) else prompts, bos=True, device=device)
     prompt_length = encoded.size(0)
 
     torch.manual_seed(1234)
@@ -453,8 +453,8 @@ def main(
 
     for i in range(start, num_samples):
         device_sync(device=device) # MKG
-        if i >= 0 and (interactive or isinstance(prompt, List)):
-            prompt = prompt[i] if isinstance(prompt, List) else input("What is your prompt? ")
+        if i >= 0 and (interactive or isinstance(prompts, List)):
+            prompt = prompts[i] if isinstance(prompts, List) else input("What is your prompt? ")
             if is_chat:
                 prompt = f"{B_INST} {prompt.strip()} {E_INST}"
             encoded = encode_tokens(tokenizer, prompt, bos=True, device=device)
