@@ -277,7 +277,7 @@ class TransformerBlock(nn.Module):
         self.layer_id = layer_id
         self.chai_activate = config.chai_activate
         self.prune_layer = config.prune_layer
-        self.chai_layer_param = config.chai_layers[layer_id]
+        self.chai_layer_param = config.chai_layers[layer_id] if layer_id < len(config.chai_layers) else config.chai_layers[-1]
 
     def forward(self, x: Tensor, input_pos: Tensor, freqs_cis: Tensor, mask: Tensor) -> Tensor:
         h = x + self.attention(self.attention_norm(x), freqs_cis, mask, input_pos)
@@ -310,7 +310,7 @@ class Attention(nn.Module):
         self.layer_id = layer_id
         self.chai_activate = config.chai_activate
         self.prune_layer = config.prune_layer
-        self.chai_layer_param = config.chai_layers[layer_id]
+        self.chai_layer_param = config.chai_layers[layer_id] if layer_id < len(config.chai_layers) else config.chai_layers[-1]
 
     def load_hook(self, state_dict, prefix, *args):
         if prefix + "wq.weight" in state_dict:
