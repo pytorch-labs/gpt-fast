@@ -264,6 +264,8 @@ if __name__ == '__main__':
     parser.add_argument('--limit', type=int, default=None, help='number of samples to evalulate')
     parser.add_argument('--max_seq_length', type=int, default=None, help='maximum length sequence to evaluate')
 
+    parser.add_argument('--chai_activate', action='store_true', help='Enable clustered head attention inference')
+
     args = parser.parse_args()
     main(
         Path(args.checkpoint_path), args.compile, args.tasks, args.limit, args.max_seq_length,
