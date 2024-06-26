@@ -25,6 +25,9 @@ def convert_hf_checkpoint(
     checkpoint_dir: Path = Path("checkpoints/meta-Transformer/Transformer-2-7b-chat-hf"),
     model_name: Optional[str] = None,
 ) -> None:
+    if "stories" in checkpoint_dir.name:
+        # No need to convert tinyllamas
+        return
     if model_name is None:
         model_name = checkpoint_dir.name
 
