@@ -35,7 +35,7 @@ class ModelArgs:
     rope_base: float = 10000
     norm_eps: float = 1e-5
 
-    prune_layer: int = 16 # 32
+    prune_layer: int = 0
     chai_activate: bool = True
     chai_layers: list = field(
         default_factory=lambda: [
