@@ -427,31 +427,18 @@ class Attention(nn.Module):
                     device=q.device,
                     dtype=q.dtype,
                 )
-                k_new = torch.zeros(
-                    [num_examples, self.chai_layer_param, seq_len, head_dim],
-                    dtype=k.dtype,
-                    device=k.device,
-                )
-                q_new = torch.zeros(
-                    [num_examples, self.chai_layer_param, 1, head_dim],
-                    dtype=q.dtype,
-                    device=q.device,
-                )
                 cluster_assignment = self.grouping
+                selected = [np.where(self.grouping == cluster_idx)[0].tolist()[0] for cluster_idx in range(self.chai_layer_param)]
                 for ex_id in range(num_examples):
                     temp_data = dict()
                     for cluster_idx in range(self.chai_layer_param):
                         grouped_heads = np.where(cluster_assignment == cluster_idx)[
                             0
                         ].tolist()
-                        k_new[ex_id, cluster_idx, :, :] = k[
-                            ex_id, grouped_heads[0], :, :
-                        ]
-                        q_new[ex_id, cluster_idx, :, :] = q[
-                            ex_id, grouped_heads[0], :, :
-                        ]
                         temp_data[cluster_idx] = grouped_heads
                     cluster_assignment_log_per_example[ex_id] = temp_data
+                k_new = k[:, selected, :, :]
+                q_new = q[:, selected, :, :]
 
             scores_new_temp = torch.matmul(q_new, k_new.transpose(2, 3)) / math.sqrt(
                 self.head_dim
