@@ -364,17 +364,6 @@ class Attention(nn.Module):
                     device=q.device,
                     dtype=q.dtype,
                 )
-                k_new = torch.zeros(
-                    [num_examples, self.chai_layer_param, seq_len, head_dim],
-                    dtype=k.dtype,
-                    device=k.device,
-                )
-                q_new = torch.zeros(
-                    [num_examples, self.chai_layer_param, seq_len, head_dim],
-                    dtype=q.dtype,
-                    device=q.device,
-                )
-
                 for ex_id in range(num_examples):
                     assert num_examples == 1
                     temp_data = dict()
@@ -403,18 +392,16 @@ class Attention(nn.Module):
                         grouped_heads = np.where(cluster_assignment == cluster_idx)[
                             0
                         ].tolist()
-                        k_new[ex_id, cluster_idx, :, :] = k[
-                            ex_id, grouped_heads[0], :seq_len, :
-                        ]
-                        q_new[ex_id, cluster_idx, :, :] = q[
-                            ex_id, grouped_heads[0], :seq_len, :
-                        ]
                         temp_data[cluster_idx] = grouped_heads
                     cluster_assignment_log_per_example[ex_id] = temp_data
                     # else:
                     # cluster_assignment_log_per_example[ex_id] = temp_data
                     # xk_new = xk
                     # xq_new = xq
+                    # TODO: handle batch size > 1
+                    selected = [np.where(self.grouping == cluster_idx)[0].tolist()[0] for cluster_idx in range(self.chai_layer_param)]
+                    k_new = k[:, selected, :, :]
+                    q_new = q[:, selected, :, :]
             else:
                 # scores
                 k = self.kv_cache.k_cache[:bsz, :, : input_pos[0] + seqlen, :]
@@ -437,6 +424,7 @@ class Attention(nn.Module):
                         ].tolist()
                         temp_data[cluster_idx] = grouped_heads
                     cluster_assignment_log_per_example[ex_id] = temp_data
+                # TODO: handle batch size > 1
                 k_new = k[:, selected, :, :]
                 q_new = q[:, selected, :, :]
 
