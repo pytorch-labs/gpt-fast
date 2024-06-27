@@ -3,6 +3,12 @@
 
 ## Downloading Weights
 
+Models tested/supported
+```text
+Mixtral-8x7B-v0.1
+databricks/dbrx-base
+```
+
 ```bash
 export MODEL_REPO=mistralai/Mixtral-8x7B-v0.1
 python scripts/download.py --repo_id $MODEL_REPO
@@ -12,10 +18,21 @@ python scripts/convert_hf_checkpoint.py --checkpoint_dir checkpoints/$MODEL_REPO
 ## Benchmarks
 Benchmarks run on an 8xA100-80GB, power limited to 330W with a hybrid cube mesh topology. Note that all benchmarks are run at *batch size=1*, making the reported tokens/s numbers equivalent to "tokens/s/user". In addition, they are run with a very small prompt length (just 5 tokens).
 
+### Mixtral-8x7B
+Mixtral has 46.7B total parameters but only uses 12.9B parameters per token, 8 experts and chooses 2.
+
 |                  |   1 GPU |    2 GPU  | 4 GPU  |    8 GPU   |
 |------------------|---------|-----------|--------|------------|
 |baseline(bfloat16)|    OOM  |    96.67  | 155.35 |  227.82    |
 |        int8      |   97.92 |   155.03  | 216.87 |  279.35    |
+
+### dbrx-base
+DBRX has 132B total parameters of which 36B parameters are active on any input, 16 experts and chooses 4.
+
+|                  |   1 GPU |    2 GPU  | 4 GPU  |    8 GPU   |
+|------------------|---------|-----------|--------|------------|
+|baseline(bfloat16)|    OOM  |     OOM   | 59.53  |  100.51    |
+|        int8      |    OOM  |    66.72  | 91.21  |  146.86    |
 
 
 ## Generate Text

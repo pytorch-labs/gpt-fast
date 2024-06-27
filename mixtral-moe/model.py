@@ -31,6 +31,7 @@ class ModelArgs:
     norm_eps: float = 1e-5
     num_experts: int = 8
     num_activated_experts: int = 2
+    clip_qkv: Optional[float] = None
 
     def __post_init__(self):
         if self.n_local_heads == -1:
@@ -53,7 +54,15 @@ class ModelArgs:
 
 transformer_configs = {
     "Mixtral-8x7B-v0.1": dict(block_size=32768, n_layer=32, n_head=32, n_local_heads=8, dim=4096, intermediate_size=14336, rope_base=1000000.0, num_experts=8, num_activated_experts=2),
+    "dbrx-base": dict(block_size=32768, n_layer=40, n_head=48, n_local_heads=8, dim=6144, intermediate_size=10752, rope_base=500000.0, num_experts=16, num_activated_experts=4, vocab_size=100352, clip_qkv=8.0),
+    "dbrx-instruct": dict(block_size=32768, n_layer=40, n_head=48, n_local_heads=8, dim=6144, intermediate_size=10752, rope_base=500000.0, num_experts=16, num_activated_experts=4, vocab_size=100352, clip_qkv=8.0),
 }
+
+def is_dbrx(config: ModelArgs):
+    if config.n_layer == 40 and config.rope_base == 500000.0:
+        return True
+    else:
+        return False
 
 class KVCache(nn.Module):
     def __init__(self, max_batch_size, max_seq_length, n_heads, head_dim, dtype=torch.bfloat16):
@@ -80,7 +89,10 @@ class Transformer(nn.Module):
 
         self.tok_embeddings = nn.Embedding(config.vocab_size, config.dim)
         self.layers = nn.ModuleList(TransformerBlock(config) for _ in range(config.n_layer))
-        self.norm = RMSNorm(config.dim, eps=config.norm_eps)
+        if is_dbrx(config):
+            self.norm = nn.LayerNorm(config.dim, eps=config.norm_eps, bias=False)
+        else:
+            self.norm = RMSNorm(config.dim, eps=config.norm_eps)
         self.output = nn.Linear(config.dim, config.vocab_size, bias=False)
 
         self.freqs_cis: Optional[Tensor] = None
@@ -123,8 +135,12 @@ class TransformerBlock(nn.Module):
         super().__init__()
         self.attention = Attention(config)
         self.block_sparse_moe = MOEFeedForward(config)
-        self.ffn_norm = RMSNorm(config.dim, config.norm_eps)
-        self.attention_norm = RMSNorm(config.dim, config.norm_eps)
+        if is_dbrx(config):
+            self.ffn_norm = nn.LayerNorm(config.dim, config.norm_eps, bias=False)
+            self.attention_norm = nn.LayerNorm(config.dim, config.norm_eps, bias=False)
+        else:
+            self.ffn_norm = RMSNorm(config.dim, config.norm_eps)
+            self.attention_norm = RMSNorm(config.dim, config.norm_eps)
 
     def forward(self, x: Tensor, input_pos: Tensor, freqs_cis: Tensor, mask: Tensor) -> Tensor:
         h = x + self.attention(self.attention_norm(x), freqs_cis, mask, input_pos)
@@ -147,6 +163,7 @@ class Attention(nn.Module):
         self.head_dim = config.head_dim
         self.n_local_heads = config.n_local_heads
         self.dim = config.dim
+        self.clip_qkv = config.clip_qkv
         self._register_load_state_dict_pre_hook(self.load_hook)
 
     def load_hook(self, state_dict, prefix, *args):
@@ -160,7 +177,10 @@ class Attention(nn.Module):
         bsz, seqlen, _ = x.shape
 
         kv_size = self.n_local_heads * self.head_dim
-        q, k, v = self.wqkv(x).split([self.dim, kv_size, kv_size], dim=-1)
+        qkv_states = self.wqkv(x)
+        if self.clip_qkv is not None:
+            qkv_states = qkv_states.clamp(min = -self.clip_qkv, max = self.clip_qkv)
+        q, k, v = qkv_states.split([self.dim, kv_size, kv_size], dim=-1)
 
         q = q.view(bsz, seqlen, self.n_head, self.head_dim)
         k = k.view(bsz, seqlen, self.n_local_heads, self.head_dim)
@@ -215,7 +235,7 @@ class MOEFeedForward(nn.Module):
         scores = self.gate(x) # [T, E]
         expert_weights = F.softmax(scores, dim=-1)
         expert_weights, expert_indices = torch.topk(expert_weights, self.num_activated_experts, dim=-1) # [T, A], [T, A]
-        expert_weights /= expert_weights.sum(dim=-1, keepdim=True) # [T, A]
+        expert_weights = expert_weights / torch.norm(expert_weights, p=1, dim=-1, keepdim=True)
         expert_outs = self.cond_ffn(x, expert_indices)
         return torch.einsum('tai,ta -> ti', expert_outs, expert_weights)
 
@@ -245,16 +265,20 @@ def precompute_freqs_cis(
     return cache.to(dtype=torch.bfloat16)
 
 
-def apply_rotary_emb(x: Tensor, freqs_cis: Tensor) -> Tensor:
-    xshaped = x.float().reshape(*x.shape[:-1], -1, 2)
-    freqs_cis = freqs_cis.view(1, xshaped.size(1), 1, xshaped.size(3), 2)
-    x_out2 = torch.stack(
-        [
-            xshaped[..., 0] * freqs_cis[..., 0] - xshaped[..., 1] * freqs_cis[..., 1],
-            xshaped[..., 1] * freqs_cis[..., 0] + xshaped[..., 0] * freqs_cis[..., 1],
-        ],
-        -1,
-    )
+def rotate_half(x):
+    """Rotates half the hidden dims of the input."""
+    x1 = x[..., : x.shape[-1] // 2]
+    x2 = x[..., x.shape[-1] // 2 :]
+    return torch.cat((-x2, x1), dim=-1)
 
-    x_out2 = x_out2.flatten(3)
-    return x_out2.type_as(x)
+
+def apply_rotary_emb(x: Tensor, freqs_cis: Tensor) -> Tensor:
+    fc_shape = freqs_cis.shape
+    freqs_cis = freqs_cis.view(1, fc_shape[0], 1, fc_shape[1], fc_shape[2])
+    cos, sin = freqs_cis.split([1, 1], dim=-1)
+    cos = cos.squeeze(-1)
+    sin = sin.squeeze(-1)
+    cos = torch.cat((cos, cos), dim=-1)
+    sin = torch.cat((sin, sin), dim=-1)
+    z = (x * cos) + (rotate_half(x)) * sin
+    return z
