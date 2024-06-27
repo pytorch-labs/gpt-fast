@@ -441,14 +441,12 @@ class Attention(nn.Module):
             )
             # if use_small:
             # putting them back together
+            cluster_idx_index = torch.zeros(num_org_heads, dtype=torch.int)
             for ex_id in range(num_examples):
                 for cluster_idx in range(self.chai_layer_param):
-                    scores_new_xk_xq[
-                        ex_id,
-                        cluster_assignment_log_per_example[ex_id][cluster_idx],
-                        :,
-                        :,
-                    ] = scores_new_temp[ex_id, cluster_idx, :, :]
+                    cluster_idx_index[cluster_assignment_log_per_example[ex_id][cluster_idx]] = cluster_idx
+                scores_new_xk_xq[ex_id, :, :, :] = scores_new_temp[ex_id, cluster_idx_index, :, :]
+
             # else:
             # scores_new_xk_xq = scores_new_temp
             if mask is not None:
