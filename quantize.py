@@ -124,8 +124,8 @@ def group_quantize_tensor_from_qparams(w, scales, zeros, n_bit=4, groupsize=128)
         .to(torch.int32)
         .reshape_as(w)
     )
-
-    return w_int32
+    w_uint8 = (w_int32[::,::2] << 4 | w_int32[::,1::2]).to(torch.uint8)
+    return w_uint8
 
 
 def group_quantize_tensor(w, n_bit=4, groupsize=128):
@@ -357,10 +357,9 @@ class WeightOnlyInt8Linear(torch.nn.Module):
 ##### weight only int4 per channel groupwise quantized code ######
 
 def prepare_int4_weight_and_scales_and_zeros(weight_bf16, groupsize, inner_k_tiles):
-    weight_int32, scales_and_zeros = group_quantize_tensor(
+    weight_int4pack, scales_and_zeros = group_quantize_tensor(
         weight_bf16, n_bit=4, groupsize=groupsize
     )
-    weight_int4pack = torch.ops.aten._convert_weight_to_int4pack(weight_int32, inner_k_tiles)
     return weight_int4pack, scales_and_zeros
 
 
@@ -404,7 +403,7 @@ class WeightOnlyInt4QuantHandler:
 
     @torch.no_grad()
     def create_quantized_state_dict(self, use_cuda = True):
-        if use_cuda:
+        if use_cuda and torch.cuda.is_available():
             device="cuda"
         else:
             device="cpu"
@@ -507,7 +506,7 @@ class WeightOnlyInt4Linear(torch.nn.Module):
         assert in_features % (inner_k_tiles * 16) == 0, "require in_features % (innerKTiles * 16) == 0"
         self.register_buffer(
             "weight",
-            torch.empty((out_features // 8, in_features // (inner_k_tiles * 16), 32, inner_k_tiles // 2), dtype=torch.int32)
+            torch.empty((out_features, in_features // 2), dtype=torch.uint8)
         )
         self.register_buffer(
             "scales_and_zeros",
