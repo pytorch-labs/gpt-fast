@@ -77,7 +77,6 @@ def decode_n_tokens(model: Transformer, cur_token: torch.Tensor, input_pos: torc
             callback(new_tokens[-1])
             new_probs.append(next_prob.clone())
             cur_token = next_token.view(1, -1)
-
     return new_tokens, new_probs
 
 
@@ -241,6 +240,13 @@ def _load_model(checkpoint_path, device, precision, use_tp):
         apply_tp(model)
 
     model = model.to(device=device, dtype=precision)
+    if "int4" in str(checkpoint_path):
+        from quantize import WeightOnlyInt4Linear
+        for fqn, mod in model.named_modules():
+            if isinstance(mod, WeightOnlyInt4Linear):
+                weight = mod.weight.data
+                weight_int4pack = torch.ops.aten._convert_weight_to_int4pack(weight, mod.inner_k_tiles)
+                mod.weight = weight_int4pack
     return model.eval()
 
 def _get_model_size(model):
