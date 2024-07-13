@@ -132,7 +132,8 @@ Benchmarks run on one GCD of a MI-250x.
 ### Using Grouped Query Attention
 Benchmarks run on 1 NVIDIA H100.
 
-Using ```bash
+Using
+```bash
 export MODEL_REPO=meta-llama/Llama-2-7b-chat-hf
 ```
 
@@ -141,7 +142,6 @@ export MODEL_REPO=meta-llama/Llama-2-7b-chat-hf
 | Llama-2-7B | Base    | 146.66     | 1938.12 |
 |           | 8-bit   | 233.50    | 1543.55 |
 |           | 4-bit (G=32)   | 267.11    | 1103.14 |
-
 
 ## Generate Text
 
