@@ -195,9 +195,7 @@ class Attention(nn.Module):
         if self.kv_cache is not None:
             k, v = self.kv_cache.update(input_pos, k, v)
 
-        k = k.repeat_interleave(self.n_head // self.n_local_heads, dim=1)
-        v = v.repeat_interleave(self.n_head // self.n_local_heads, dim=1)
-        y = F.scaled_dot_product_attention(q, k, v, attn_mask=mask, dropout_p=0.0)
+        y = F.scaled_dot_product_attention(q, k, v, attn_mask=mask, dropout_p=0.0, enable_gqa=True)
 
         y = y.transpose(1, 2).contiguous().view(bsz, seqlen, self.dim)
 
