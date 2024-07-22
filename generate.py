@@ -303,10 +303,12 @@ def encode_tokens(tokenizer, string, bos=True, device=default_device):
         tokens = [tokenizer.bos_id()] + tokens
     return torch.tensor(tokens, dtype=torch.int, device=device)
 
-def _load_model(checkpoint_path, device, precision, use_tp, early_exit: int = -1):
+def _load_model(checkpoint_path, device, precision, use_tp, early_exit: int = -1, model_name: str = None):
     use_cuda = 'cuda' in device
     with torch.device('meta'):
-        model = Transformer.from_name(checkpoint_path.parent.name, early_exit=early_exit)
+        if model_name is None:
+            model_name = checkpoint_path.parent.name
+        model = Transformer.from_name(model_name, early_exit=early_exit)
 
     if "int8" in str(checkpoint_path):
         print("Using int8 weight-only quantization!")
@@ -368,6 +370,7 @@ def main(
     early_exit: int = -1,
     device=default_device,
     log_file: Optional[Path] = None,
+    model_name: Optional[str] = None,
 ) -> None:
     """Generates text samples based on a pre-trained Transformer model and tokenizer.
     """
@@ -392,7 +395,7 @@ def main(
 
     print("Loading model ...")
     t0 = time.time()
-    model = _load_model(checkpoint_path, device, precision, use_tp, early_exit=early_exit if self_speculative else -1)
+    model = _load_model(checkpoint_path, device, precision, use_tp, early_exit=early_exit if self_speculative else -1, model_name=model_name)
 
     if is_speculative:
         draft_model = _load_model(draft_checkpoint_path, device, precision, use_tp)
@@ -553,6 +556,7 @@ if __name__ == '__main__':
     parser.add_argument('--top_p', type=float, default=1.0, help='Top-p for sampling.')
     parser.add_argument('--temperature', type=float, default=0.8, help='Temperature for sampling.')
     parser.add_argument('--checkpoint_path', type=Path, default=Path("checkpoints/meta-Transformer/Transformer-2-7b-chat-hf/model.pth"), help='Model checkpoint path.')
+    parser.add_argument('--model_name', type=str, default=None, help='Model name to help find the architecture of the model.')
     parser.add_argument('--compile', action='store_true', help='Whether to compile the model.')
     parser.add_argument('--compile_prefill', action='store_true', help='Whether to compile the prefill (improves prefill perf, but higher compile times)')
     parser.add_argument('--profile', type=Path, default=None, help='Profile path.')
@@ -568,5 +572,5 @@ if __name__ == '__main__':
     main(
         args.prompt, args.interactive, args.num_samples, args.max_new_tokens, args.top_k, args.top_p,
         args.temperature, args.checkpoint_path, args.compile, args.compile_prefill, args.profile, args.draft_checkpoint_path, args.draft_early_exit,
-        args.speculate_k, args.self_speculative, args.early_exit, args.device, args.log_file,
+        args.speculate_k, args.self_speculative, args.early_exit, args.device, args.log_file, args.model_name
     )
