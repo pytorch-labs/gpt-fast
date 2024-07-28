@@ -231,6 +231,7 @@ def generate(
     speculate_k: Optional[int] = 8,
     is_self_speculative: bool = False,
     callback = lambda x: x,
+    max_seq_len: Optional[int] = -1,
     **sampling_kwargs
 ) -> torch.Tensor:
     """
@@ -241,13 +242,20 @@ def generate(
     # create an empty tensor of the expected final shape and fill in the current tokens
     T = prompt.size(0)
     T_new = T + max_new_tokens
-    if interactive:
-        max_seq_length = 350
+
+    if max_seq_len == -1:
+        if interactive:
+            max_seq_length = 350
+        else:
+            max_seq_length = min(T_new, model.config.block_size)
     else:
-        max_seq_length = min(T_new, model.config.block_size)
+        max_seq_length = max_seq_len
+
+    max_seq_length = max_seq_length + speculate_k + 1 if is_speculative else max_seq_length
+    print("\nSetting max_seq_length to ", max_seq_length)
 
     device, dtype = prompt.device, prompt.dtype
-    max_seq_length = max_seq_length + speculate_k + 1 if is_speculative else max_seq_length
+
     with torch.device(device):
         model.setup_caches(max_batch_size=1, max_seq_length=max_seq_length)
         if is_speculative and draft_model is not model:
@@ -303,10 +311,12 @@ def encode_tokens(tokenizer, string, bos=True, device=default_device):
         tokens = [tokenizer.bos_id()] + tokens
     return torch.tensor(tokens, dtype=torch.int, device=device)
 
-def _load_model(checkpoint_path, device, precision, use_tp, early_exit: int = -1):
+def _load_model(checkpoint_path, device, precision, use_tp, early_exit: int = -1, model_name: str = None):
     use_cuda = 'cuda' in device
     with torch.device('meta'):
-        model = Transformer.from_name(checkpoint_path.parent.name, early_exit=early_exit)
+        if model_name is None:
+            model_name = checkpoint_path.parent.name
+        model = Transformer.from_name(model_name, early_exit=early_exit)
 
     if "int8" in str(checkpoint_path):
         print("Using int8 weight-only quantization!")
@@ -368,6 +378,8 @@ def main(
     early_exit: int = -1,
     device=default_device,
     log_file: Optional[Path] = None,
+    model_name: Optional[str] = None,
+    max_seq_len: Optional[int] = -1
 ) -> None:
     """Generates text samples based on a pre-trained Transformer model and tokenizer.
     """
@@ -392,7 +404,7 @@ def main(
 
     print("Loading model ...")
     t0 = time.time()
-    model = _load_model(checkpoint_path, device, precision, use_tp, early_exit=early_exit if self_speculative else -1)
+    model = _load_model(checkpoint_path, device, precision, use_tp, early_exit=early_exit if self_speculative else -1, model_name=model_name)
 
     if is_speculative:
         draft_model = _load_model(draft_checkpoint_path, device, precision, use_tp)
@@ -448,8 +460,10 @@ def main(
     aggregate_metrics = {
         'tokens_per_sec': [],
         'accept_counts': [],
+        'time_for_inference': []
     }
     start = -1 if compile else 0
+    max_seq_len_check = -1
 
     for i in range(start, num_samples):
         device_sync(device=device) # MKG
@@ -457,6 +471,7 @@ def main(
             prompt = prompts[i] if isinstance(prompts, List) else input("What is your prompt? ")
             if is_chat:
                 prompt = f"{B_INST} {prompt.strip()} {E_INST}"
+            max_seq_len_check = max(max_seq_len_check, len(prompt))
             encoded = encode_tokens(tokenizer, prompt, bos=True, device=device)
             prompt_length = encoded.size(0)
 
@@ -493,6 +508,7 @@ def main(
                 speculate_k=speculate_k,
                 interactive=interactive,
                 callback=callback,
+                max_seq_len=max_seq_len,
                 temperature=temperature,
                 is_self_speculative=self_speculative,
                 top_k=top_k,
@@ -517,9 +533,11 @@ def main(
         tokens_generated = y.size(0) - prompt_length
         tokens_sec = tokens_generated / t
         aggregate_metrics['tokens_per_sec'].append(tokens_sec)
+        aggregate_metrics['time_for_inference'].append(t)
         print(f"Time for inference {i + 1}: {t:.02f} sec total, {tokens_sec:.02f} tokens/sec")
         print(f"Bandwidth achieved: {model_size * tokens_sec / 1e9:.02f} GB/s")
     print("==========")
+    print("max_seq_len_check: ", max_seq_len_check)
     if is_speculative:
         print(aggregate_metrics)
         counts_aggregated = [sum(i) for i in zip(*aggregate_metrics['accept_counts'])]
@@ -528,6 +546,7 @@ def main(
         print(f"Mean Accepted: {sum([idx * i for idx, i in enumerate(counts_aggregated)])/sum(counts_aggregated)}")
 
     print(f"Average tokens/sec: {torch.mean(torch.tensor(aggregate_metrics['tokens_per_sec'])).item():.2f}")
+    print(f"Average timer for inference: {torch.mean(torch.tensor(aggregate_metrics['time_for_inference'])).item():.2f}")
     print(f"Memory used: {torch.cuda.max_memory_reserved() / 1e9:.02f} GB")
     aggregate_metrics["memory_used"] = torch.cuda.max_memory_reserved()
 
@@ -553,6 +572,7 @@ if __name__ == '__main__':
     parser.add_argument('--top_p', type=float, default=1.0, help='Top-p for sampling.')
     parser.add_argument('--temperature', type=float, default=0.8, help='Temperature for sampling.')
     parser.add_argument('--checkpoint_path', type=Path, default=Path("checkpoints/meta-Transformer/Transformer-2-7b-chat-hf/model.pth"), help='Model checkpoint path.')
+    parser.add_argument('--model_name', type=str, default=None, help='Model name to help find the architecture of the model.')
     parser.add_argument('--compile', action='store_true', help='Whether to compile the model.')
     parser.add_argument('--compile_prefill', action='store_true', help='Whether to compile the prefill (improves prefill perf, but higher compile times)')
     parser.add_argument('--profile', type=Path, default=None, help='Profile path.')
@@ -568,5 +588,5 @@ if __name__ == '__main__':
     main(
         args.prompt, args.interactive, args.num_samples, args.max_new_tokens, args.top_k, args.top_p,
         args.temperature, args.checkpoint_path, args.compile, args.compile_prefill, args.profile, args.draft_checkpoint_path, args.draft_early_exit,
-        args.speculate_k, args.self_speculative, args.early_exit, args.device, args.log_file,
+        args.speculate_k, args.self_speculative, args.early_exit, args.device, args.log_file, args.model_name
     )
