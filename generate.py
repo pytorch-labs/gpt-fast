@@ -231,6 +231,7 @@ def generate(
     speculate_k: Optional[int] = 8,
     is_self_speculative: bool = False,
     callback = lambda x: x,
+    max_seq_len: Optional[int] = -1,
     **sampling_kwargs
 ) -> torch.Tensor:
     """
@@ -241,13 +242,20 @@ def generate(
     # create an empty tensor of the expected final shape and fill in the current tokens
     T = prompt.size(0)
     T_new = T + max_new_tokens
-    if interactive:
-        max_seq_length = 350
+
+    if max_seq_len == -1:
+        if interactive:
+            max_seq_length = 350
+        else:
+            max_seq_length = min(T_new, model.config.block_size)
     else:
-        max_seq_length = min(T_new, model.config.block_size)
+        max_seq_length = max_seq_len
+
+    max_seq_length = max_seq_length + speculate_k + 1 if is_speculative else max_seq_length
+    print("\nSetting max_seq_length to ", max_seq_length)
 
     device, dtype = prompt.device, prompt.dtype
-    max_seq_length = max_seq_length + speculate_k + 1 if is_speculative else max_seq_length
+
     with torch.device(device):
         model.setup_caches(max_batch_size=1, max_seq_length=max_seq_length)
         if is_speculative and draft_model is not model:
@@ -371,6 +379,7 @@ def main(
     device=default_device,
     log_file: Optional[Path] = None,
     model_name: Optional[str] = None,
+    max_seq_len: Optional[int] = -1
 ) -> None:
     """Generates text samples based on a pre-trained Transformer model and tokenizer.
     """
@@ -451,8 +460,10 @@ def main(
     aggregate_metrics = {
         'tokens_per_sec': [],
         'accept_counts': [],
+        'time_for_inference': []
     }
     start = -1 if compile else 0
+    max_seq_len_check = -1
 
     for i in range(start, num_samples):
         device_sync(device=device) # MKG
@@ -460,6 +471,7 @@ def main(
             prompt = prompts[i] if isinstance(prompts, List) else input("What is your prompt? ")
             if is_chat:
                 prompt = f"{B_INST} {prompt.strip()} {E_INST}"
+            max_seq_len_check = max(max_seq_len_check, len(prompt))
             encoded = encode_tokens(tokenizer, prompt, bos=True, device=device)
             prompt_length = encoded.size(0)
 
@@ -496,6 +508,7 @@ def main(
                 speculate_k=speculate_k,
                 interactive=interactive,
                 callback=callback,
+                max_seq_len=max_seq_len,
                 temperature=temperature,
                 is_self_speculative=self_speculative,
                 top_k=top_k,
@@ -520,9 +533,11 @@ def main(
         tokens_generated = y.size(0) - prompt_length
         tokens_sec = tokens_generated / t
         aggregate_metrics['tokens_per_sec'].append(tokens_sec)
+        aggregate_metrics['time_for_inference'].append(t)
         print(f"Time for inference {i + 1}: {t:.02f} sec total, {tokens_sec:.02f} tokens/sec")
         print(f"Bandwidth achieved: {model_size * tokens_sec / 1e9:.02f} GB/s")
     print("==========")
+    print("max_seq_len_check: ", max_seq_len_check)
     if is_speculative:
         print(aggregate_metrics)
         counts_aggregated = [sum(i) for i in zip(*aggregate_metrics['accept_counts'])]
@@ -531,6 +546,7 @@ def main(
         print(f"Mean Accepted: {sum([idx * i for idx, i in enumerate(counts_aggregated)])/sum(counts_aggregated)}")
 
     print(f"Average tokens/sec: {torch.mean(torch.tensor(aggregate_metrics['tokens_per_sec'])).item():.2f}")
+    print(f"Average timer for inference: {torch.mean(torch.tensor(aggregate_metrics['time_for_inference'])).item():.2f}")
     print(f"Memory used: {torch.cuda.max_memory_reserved() / 1e9:.02f} GB")
     aggregate_metrics["memory_used"] = torch.cuda.max_memory_reserved()
 
