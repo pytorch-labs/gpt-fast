@@ -105,7 +105,9 @@ def decode_n_tokens(model: Transformer, cur_token: torch.Tensor, input_pos: torc
                 )
             input_pos += 1
             new_tokens.append(next_token.clone())
-            callback(new_tokens[-1])
+            if callback(new_tokens[-min(4, len(new_tokens)):]):
+                new_tokens.pop()
+                break
             new_probs.append(next_prob.clone())
             cur_token = next_token.view(1, -1)
 
@@ -298,7 +300,8 @@ def generate(
             next_token = next_tokens[-1]
     else:
         generated_tokens, _ = decode_n_tokens(model, next_token.view(1, -1), input_pos, max_new_tokens - 1, callback=callback, **sampling_kwargs)
-        seq[T + 1:] = torch.cat(generated_tokens)
+        seq[T + 1: T + 1 + len(generated_tokens)] = torch.cat(generated_tokens)
+        seq = seq[:T + 1 + len(generated_tokens)]
 
     generate_stats = {
         'accept_counts': accept_counts
@@ -380,7 +383,8 @@ def main(
     log_results: Optional[Path] = None,
     log_generations: Optional[Path] = None,
     model_name: Optional[str] = None,
-    max_seq_len: Optional[int] = -1
+    stop_words: Optional[List[str]] = None,
+    max_seq_len: Optional[int] = -1,
 ) -> None:
     """Generates text samples based on a pre-trained Transformer model and tokenizer.
     """
@@ -429,6 +433,14 @@ def main(
     print(f"Time to load model: {time.time() - t0:.02f} seconds")
 
     tokenizer = get_tokenizer(tokenizer_path, checkpoint_path)
+
+    stop_token_ids = []
+    if stop_words:
+        for stop_word in stop_words:
+            ids = tokenizer.encode(stop_word)
+            if True: # ids[0] == tokenizer.bos_id():
+                ids = ids[1:]
+            stop_token_ids.append(ids)
 
     encoded = encode_tokens(tokenizer, prompts[0] if isinstance(prompts, List) else prompts, bos=True, device=device)
     prompt_length = encoded.size(0)
@@ -487,21 +499,37 @@ def main(
                 nonlocal done_generating
                 if done_generating:
                     return
-                buffer.append(tokenizer.decode([period_id] + x.tolist())[1:])
-                if x.item() == tokenizer.eos_id():
+                if not isinstance(x, List):
+                    x = [x]
+                buffer.append(tokenizer.decode([period_id] + x[-1].tolist())[1:])
+                if x[-1].item() == tokenizer.eos_id():
                     done_generating = True
                 if len(buffer) == 4 or done_generating:
                     print(''.join(buffer), end='', flush=True)
                     buffer.clear()
                 # print(, end='', flush=True)
+                return done_generating
         else:
             done_generating = False
             def callback(x):
                 nonlocal done_generating
                 if done_generating:
                     return
-                if x.item() == tokenizer.eos_id():
+                if not isinstance(x, List):
+                    x = [x]
+                if x[-1].item() == tokenizer.eos_id():
                     done_generating = True
+                if stop_token_ids:
+                    x = [val.item() for val in x]
+                    for stop_word in stop_words:
+                        if stop_word in tokenizer.decode(x):
+                            done_generating = True
+                            break
+                    for stop_word in stop_token_ids:
+                        if x[-len(stop_word):] == stop_word:
+                            done_generating = True
+                            break
+                return done_generating
         t0 = time.perf_counter()
         import contextlib
         if (i != num_samples - 1 or not profile) or (use_tp and rank != 0):
@@ -604,10 +632,11 @@ if __name__ == '__main__':
     parser.add_argument('--device', type=str, default=default_device, help='Device to use')
     parser.add_argument('--log_results', type=Path, default=None, help='Path to log results')
     parser.add_argument('--log_generations', type=Path, default=None, help='Path to log generations')
+    parser.add_argument('--stop_words', type=str, nargs='+', default=None, help='Words to stop generating when encountered')
 
     args = parser.parse_args()
     main(
         args.prompt, args.interactive, args.num_samples, args.max_new_tokens, args.top_k, args.top_p,
         args.temperature, args.checkpoint_path, args.compile, args.compile_prefill, args.profile, args.draft_checkpoint_path, args.draft_early_exit,
-        args.speculate_k, args.self_speculative, args.early_exit, args.device, args.log_results, args.log_generations, args.model_name
+        args.speculate_k, args.self_speculative, args.early_exit, args.device, args.log_results, args.log_generations, args.model_name, args.stop_words,
     )

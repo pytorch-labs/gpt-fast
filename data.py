@@ -124,6 +124,12 @@ def prepare_human_eval() -> List[EvaluationExample]:
         )
     return evaluation_data_points
 
+def get_stop_words(dataset: str) -> List[str]:
+    if dataset == DatasetFormat.HUMAN_EVAL:
+        return ["\nclass", "\ndef", "\n#", "\n@", "\nprint", "\nif", "\n```", "<file_sep>"]
+    else:
+        return []
+
 def get_data(
     random_shuffle: bool,
     num_samples: int,

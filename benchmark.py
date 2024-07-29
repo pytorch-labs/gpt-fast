@@ -1,6 +1,6 @@
 import torch
 
-from data import get_data
+from data import get_data, get_stop_words
 from generate import main
 from pathlib import Path
 
@@ -40,8 +40,9 @@ if __name__ == '__main__':
 
     evaluation_set = get_data(args.random_shuffle, args.num_samples, args.dataset, args.data_path, args.n_shot, args.seed)
     prompts = [example.input for example in evaluation_set]
+    stop_words = get_stop_words(args.dataset)
     main(
         prompts, args.interactive, args.num_samples, args.max_new_tokens, args.top_k, args.top_p,
         args.temperature, args.checkpoint_path, args.compile, args.compile_prefill, args.profile, args.draft_checkpoint_path, args.draft_early_exit,
-        args.speculate_k, args.self_speculative, args.early_exit, args.device, args.log_results, args.log_generations, args.model_name, args.max_seq_len
+        args.speculate_k, args.self_speculative, args.early_exit, args.device, args.log_results, args.log_generations, args.model_name, stop_words, args.max_seq_len
     )
