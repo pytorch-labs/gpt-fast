@@ -360,6 +360,20 @@ def _get_model_size(model):
             )
     return model_size
 
+def stop_at_stop_words(decoded_string, stop_words):
+    """
+    Produces the prefix of decoded_string that ends at the first occurrence of
+    a stop_word.
+    WARNING: the decoded_string *must not* include the prompt, which may have stop tokens
+    itself.
+    """
+    min_stop_index = len(decoded_string)
+    for stop_word in stop_words:
+        stop_index = decoded_string.find(stop_word)
+        if stop_index != -1 and stop_index < min_stop_index:
+            min_stop_index = stop_index
+    return decoded_string[:min_stop_index]
+
 B_INST, E_INST = "[INST]", "[/INST]"
 
 def main(
@@ -566,6 +580,8 @@ def main(
 
         if not interactive:
             decoded = tokenizer.decode(y.tolist())
+            if stop_words:
+                decoded = prompt + stop_at_stop_words(decoded.removeprefix(prompt), stop_words)
             print(decoded)
             if log_generations:
                 generations.append([decoded])
