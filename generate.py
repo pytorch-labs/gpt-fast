@@ -105,8 +105,7 @@ def decode_n_tokens(model: Transformer, cur_token: torch.Tensor, input_pos: torc
                 )
             input_pos += 1
             new_tokens.append(next_token.clone())
-            if callback(new_tokens[-min(4, len(new_tokens)):]):
-                new_tokens.pop()
+            if callback(new_tokens):
                 break
             new_probs.append(next_prob.clone())
             cur_token = next_token.view(1, -1)
@@ -534,8 +533,10 @@ def main(
                 if x[-1].item() == tokenizer.eos_id():
                     done_generating = True
                 if stop_token_ids:
+                    # TODO: trim x to match longest encoded stop_word
                     x = [val.item() for val in x]
                     for stop_word in stop_words:
+                        # TODO: call tokenizer.decode(x) outside the loop to optimize
                         if stop_word in tokenizer.decode(x):
                             done_generating = True
                             break
