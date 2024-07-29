@@ -495,7 +495,13 @@ def main(
                     buffer.clear()
                 # print(, end='', flush=True)
         else:
-            callback = lambda x : x
+            done_generating = False
+            def callback(x):
+                nonlocal done_generating
+                if done_generating:
+                    return
+                if x.item() == tokenizer.eos_id():
+                    done_generating = True
         t0 = time.perf_counter()
         import contextlib
         if (i != num_samples - 1 or not profile) or (use_tp and rank != 0):
