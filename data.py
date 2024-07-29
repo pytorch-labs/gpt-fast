@@ -21,6 +21,7 @@ class DatasetFormat:
     CNN_DM_LM: str = "cnn_dm_lm"
     XSUM_SUMMARIZATION: str = "xsum_summarization"
     HUMAN_EVAL: str = "human_eval"
+    MBPP: str = "mbpp"
 
 
 def LowercaseProcessingFunction(input: str) -> str:
@@ -124,11 +125,28 @@ def prepare_human_eval() -> List[EvaluationExample]:
         )
     return evaluation_data_points
 
+def prepare_mbpp() -> List[EvaluationExample]:
+    evaluation_data_points = []
+    for data_point in load_dataset('google-research-datasets/mbpp', split='test'):
+        description = data_point["text"]
+        test_example = data_point["test_list"][0]
+        prompt = f'"""\n{description}\n{test_example}\n"""\n'
+        evaluation_data_points.append(
+            EvaluationExample(
+                input=prompt,
+                output=data_point["code"],
+            )
+        )
+    return evaluation_data_points
+
 def get_stop_words(dataset: str) -> List[str]:
     if dataset == DatasetFormat.HUMAN_EVAL:
         return ["\nclass", "\ndef", "\n#", "\n@", "\nprint", "\nif", "\n```", "<file_sep>"]
+    elif dataset == DatasetFormat.MBPP:
+        return ["\nclass", "\nassert", '\n"""', "\nprint", "\nif", "\n<|/", "\n```"]
     else:
         return []
+
 
 def get_data(
     random_shuffle: bool,
@@ -148,6 +166,8 @@ def get_data(
         evaluation_data_points = prepare_cnn_dm_lm_format()
     elif dataset == DatasetFormat.HUMAN_EVAL:
         evaluation_data_points = prepare_human_eval()
+    elif dataset == DatasetFormat.MBPP:
+        evaluation_data_points = prepare_mbpp()
     else:
         raise NotImplementedError(f"Unknown dataset format {dataset}")
 
