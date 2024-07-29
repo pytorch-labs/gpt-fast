@@ -377,7 +377,8 @@ def main(
     self_speculative: bool = False,
     early_exit: int = -1,
     device=default_device,
-    log_file: Optional[Path] = None,
+    log_results: Optional[Path] = None,
+    log_generations: Optional[Path] = None,
     model_name: Optional[str] = None,
     max_seq_len: Optional[int] = -1
 ) -> None:
@@ -465,6 +466,9 @@ def main(
     start = -1 if compile else 0
     max_seq_len_check = -1
 
+    if log_generations:
+        generations = []
+
     for i in range(start, num_samples):
         device_sync(device=device) # MKG
         if i >= 0 and (interactive or isinstance(prompts, List)):
@@ -527,7 +531,10 @@ def main(
         t = time.perf_counter() - t0
 
         if not interactive:
-            print(tokenizer.decode(y.tolist()))
+            decoded = tokenizer.decode(y.tolist())
+            print(decoded)
+            if log_generations:
+                generations.append([decoded])
         else:
             print()
         tokens_generated = y.size(0) - prompt_length
@@ -550,12 +557,19 @@ def main(
     print(f"Memory used: {torch.cuda.max_memory_reserved() / 1e9:.02f} GB")
     aggregate_metrics["memory_used"] = torch.cuda.max_memory_reserved()
 
-    if log_file:
+    if log_results:
         # Create parent directory if needed
-        log_file.parents[0].mkdir(parents=True, exist_ok=True)
+        log_results.parents[0].mkdir(parents=True, exist_ok=True)
         # Save config and results to file
-        with open(log_file, "w") as f:
+        with open(log_results, "w") as f:
             json.dump(aggregate_metrics, f)
+
+    if log_generations:
+        # Create parent directory if needed
+        log_generations.parents[0].mkdir(parents=True, exist_ok=True)
+        # Save config and results to file
+        with open(log_generations, "w") as f:
+            json.dump(generations, f)
 
     return aggregate_metrics
 
@@ -582,11 +596,12 @@ if __name__ == '__main__':
     parser.add_argument('--self_speculative', action='store_true', help='Whether to use self speculative decoding')
     parser.add_argument('--early_exit', type=int, default=-1, help='The layer to exit early')
     parser.add_argument('--device', type=str, default=default_device, help='Device to use')
-    parser.add_argument('--log_file', type=Path, default=None, help='Path to log results')
+    parser.add_argument('--log_results', type=Path, default=None, help='Path to log results')
+    parser.add_argument('--log_generations', type=Path, default=None, help='Path to log generations')
 
     args = parser.parse_args()
     main(
         args.prompt, args.interactive, args.num_samples, args.max_new_tokens, args.top_k, args.top_p,
         args.temperature, args.checkpoint_path, args.compile, args.compile_prefill, args.profile, args.draft_checkpoint_path, args.draft_early_exit,
-        args.speculate_k, args.self_speculative, args.early_exit, args.device, args.log_file, args.model_name
+        args.speculate_k, args.self_speculative, args.early_exit, args.device, args.log_results, args.log_generations, args.model_name
     )

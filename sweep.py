@@ -60,22 +60,22 @@ if __name__ == '__main__':
     results: List[Dict] = []
     for speculate_k in range(args.speculate_k_start, args.speculate_k_end+1):
         for early_exit in range(args.early_exit_start, args.early_exit_end+1):
-            log_file: Path = args.log_dir / f"{speculate_k}_{early_exit}.json"
+            log_results: Path = args.log_dir / f"{speculate_k}_{early_exit}.json"
             if args.dataset:
                 subprocess.check_call(
                     shlex.split(
-                        f"python benchmark.py --dataset={args.dataset} --n_shot={args.n_shot} {'--interactive' if args.interactive else ''} --num_samples={args.num_samples} --max_new_tokens={args.max_new_tokens} {'--top_k='+str(args.top_k) if args.top_k else ''} --top_p={args.top_p} --temperature={args.temperature} --checkpoint_path={args.checkpoint_path} {'--model_name='+str(args.model_name) if args.model_name else ''} {'--compile' if args.compile else ''} {'--compile_prefill' if args.compile_prefill else ''} {'--profile' if args.profile else ''} {'--draft_checkpoint_path='+str(args.draft_checkpoint_path) if args.draft_checkpoint_path else ''} --early_exit={early_exit} --speculate_k={speculate_k} {'--self_speculative' if args.self_speculative else ''} --device={args.device} --log_file={log_file}"
+                        f"python benchmark.py --dataset={args.dataset} --n_shot={args.n_shot} {'--interactive' if args.interactive else ''} --num_samples={args.num_samples} --max_new_tokens={args.max_new_tokens} {'--top_k='+str(args.top_k) if args.top_k else ''} --top_p={args.top_p} --temperature={args.temperature} --checkpoint_path={args.checkpoint_path} {'--model_name='+str(args.model_name) if args.model_name else ''} {'--compile' if args.compile else ''} {'--compile_prefill' if args.compile_prefill else ''} {'--profile' if args.profile else ''} {'--draft_checkpoint_path='+str(args.draft_checkpoint_path) if args.draft_checkpoint_path else ''} --early_exit={early_exit} --speculate_k={speculate_k} {'--self_speculative' if args.self_speculative else ''} --device={args.device} --log_results={log_results}"
                     )
                 )
             else:
                 subprocess.check_call(
                     shlex.split(
-                        f"python generate.py --prompt=\"{args.prompt}\" {'--interactive' if args.interactive else ''} --num_samples={args.num_samples} --max_new_tokens={args.max_new_tokens} {'--top_k='+str(args.top_k) if args.top_k else ''} --top_p={args.top_p} --temperature={args.temperature} --checkpoint_path={args.checkpoint_path} {'--model_name='+str(args.model_name) if args.model_name else ''} {'--compile' if args.compile else ''} {'--compile_prefill' if args.compile_prefill else ''} {'--profile' if args.profile else ''} {'--draft_checkpoint_path='+str(args.draft_checkpoint_path) if args.draft_checkpoint_path else ''} --early_exit={early_exit} --speculate_k={speculate_k} {'--self_speculative' if args.self_speculative else ''} --device={args.device} --log_file={log_file}"
+                        f"python generate.py --prompt=\"{args.prompt}\" {'--interactive' if args.interactive else ''} --num_samples={args.num_samples} --max_new_tokens={args.max_new_tokens} {'--top_k='+str(args.top_k) if args.top_k else ''} --top_p={args.top_p} --temperature={args.temperature} --checkpoint_path={args.checkpoint_path} {'--model_name='+str(args.model_name) if args.model_name else ''} {'--compile' if args.compile else ''} {'--compile_prefill' if args.compile_prefill else ''} {'--profile' if args.profile else ''} {'--draft_checkpoint_path='+str(args.draft_checkpoint_path) if args.draft_checkpoint_path else ''} --early_exit={early_exit} --speculate_k={speculate_k} {'--self_speculative' if args.self_speculative else ''} --device={args.device} --log_results={log_results}"
                     )
                 )
 
-            aggregate_metrics = json.load(log_file.open())
-            log_file.unlink()
+            aggregate_metrics = json.load(log_results.open())
+            log_results.unlink()
 
             if is_speculative:
                 counts_aggregated = [sum(i) for i in zip(*aggregate_metrics['accept_counts'])]
