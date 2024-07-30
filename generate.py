@@ -91,7 +91,7 @@ def decode_one_token_early(model: Transformer, x: torch.Tensor, input_pos: torch
     logits = model.forward_early(x, input_pos)
     return sample(logits, **sampling_kwargs)
 
-def decode_n_tokens(model: Transformer, cur_token: torch.Tensor, input_pos: torch.Tensor, num_new_tokens: int, callback=lambda _: _, **sampling_kwargs):
+def decode_n_tokens(model: Transformer, cur_token: torch.Tensor, input_pos: torch.Tensor, num_new_tokens: int, callback=lambda _: False, **sampling_kwargs):
     new_tokens, new_probs = [], []
     for i in range(num_new_tokens):
         with torch.backends.cuda.sdp_kernel(enable_flash=False, enable_mem_efficient=False, enable_math=True): # Actually better for Inductor to codegen attention here
@@ -231,7 +231,7 @@ def generate(
     draft_model: Transformer,
     speculate_k: Optional[int] = 8,
     is_self_speculative: bool = False,
-    callback = lambda x: x,
+    callback = lambda x: False,
     max_seq_len: Optional[int] = -1,
     **sampling_kwargs
 ) -> torch.Tensor:
