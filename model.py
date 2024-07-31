@@ -110,7 +110,7 @@ class Att_Mask:
         new_kv_indices = self.block_masks.kv_indices[:, :, offset, :kv_len]
         new_full_kv_num_blocks = self.block_masks.full_kv_num_blocks[:, :, offset]
         new_full_kv_indices = self.block_masks.full_kv_indices[:, :, offset, :kv_len]
-        layer_mask = BlockMask(new_kv_num_blocks, new_kv_indices, new_full_kv_num_blocks, new_full_kv_indices, self.block_masks.BLOCK_SIZE, self.mask_mod)
+        layer_mask = BlockMask(new_kv_num_blocks, new_kv_indices, new_full_kv_num_blocks, new_full_kv_indices, BLOCK_SIZE=self.block_masks.BLOCK_SIZE, mask_mod=self.mask_mod)
         return layer_mask
     
     def gen_prefill_mask(self, kv_len, q_len):
@@ -239,7 +239,8 @@ class Attention(nn.Module):
         k = k.repeat_interleave(self.n_head // self.n_local_heads, dim=1)
         v = v.repeat_interleave(self.n_head // self.n_local_heads, dim=1)
 
-        y = flex_attention(q, k, v, block_mask=mask)
+        y = flex_attention(q, k, v, block_mask=mask, enable_gqa= (self.n_head != self.n_local_heads))
+
 
         y = y.transpose(1, 2).contiguous().view(bsz, seqlen, self.dim)
 
