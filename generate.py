@@ -91,7 +91,7 @@ def decode_one_token_early(model: Transformer, x: torch.Tensor, input_pos: torch
     logits = model.forward_early(x, input_pos)
     return sample(logits, **sampling_kwargs)
 
-def decode_n_tokens(model: Transformer, cur_token: torch.Tensor, input_pos: torch.Tensor, num_new_tokens: int, callback=lambda _: _, **sampling_kwargs):
+def decode_n_tokens(model: Transformer, cur_token: torch.Tensor, input_pos: torch.Tensor, num_new_tokens: int, callback=lambda _: False, **sampling_kwargs):
     new_tokens, new_probs = [], []
     for i in range(num_new_tokens):
         with torch.backends.cuda.sdp_kernel(enable_flash=False, enable_mem_efficient=False, enable_math=True): # Actually better for Inductor to codegen attention here
@@ -231,7 +231,7 @@ def generate(
     draft_model: Transformer,
     speculate_k: Optional[int] = 8,
     is_self_speculative: bool = False,
-    callback = lambda x: x,
+    callback = lambda x: False,
     max_seq_len: Optional[int] = -1,
     **sampling_kwargs
 ) -> torch.Tensor:
@@ -292,11 +292,19 @@ def generate(
 
             accept_counts[len(next_tokens) - 1] += 1
             num_added = min(T_new - input_pos - 1, len(next_tokens))
-            seq[input_pos + 1 : input_pos + num_added + 1] = next_tokens[: num_added]
+            # TODO: call once instead of a loop
+            generation_done = False
             for i in next_tokens[: num_added,]:
                 callback(i)
+            seq[input_pos + 1 : input_pos + num_added + 1] = next_tokens[: num_added]
+            if callback(seq[T+1: input_pos+num_added+1]):
+                generation_done = True
             input_pos = input_pos + num_added
             next_token = next_tokens[-1]
+
+            if generation_done:
+                break
+        seq = seq[:input_pos]
     else:
         generated_tokens, _ = decode_n_tokens(model, next_token.view(1, -1), input_pos, max_new_tokens - 1, callback=callback, **sampling_kwargs)
         seq[T + 1: T + 1 + len(generated_tokens)] = torch.cat(generated_tokens)
@@ -447,13 +455,8 @@ def main(
 
     tokenizer = get_tokenizer(tokenizer_path, checkpoint_path)
 
-    stop_token_ids = []
     if stop_words:
-        for stop_word in stop_words:
-            ids = tokenizer.encode(stop_word)
-            if True: # ids[0] == tokenizer.bos_id():
-                ids = ids[1:]
-            stop_token_ids.append(ids)
+        longest_stop_word_length = max([len(tokenizer.encode(stop_word)) for stop_word in stop_words])
 
     encoded = encode_tokens(tokenizer, prompts[0] if isinstance(prompts, List) else prompts, bos=True, device=device)
     prompt_length = encoded.size(0)
@@ -511,9 +514,12 @@ def main(
             def callback(x):
                 nonlocal done_generating
                 if done_generating:
-                    return
-                if not isinstance(x, List):
-                    x = [x]
+                    return done_generating
+                if isinstance(x, torch.Tensor):
+                    if x.numel() <= 1:
+                        x = [x]
+                    else:
+                        x = [val for val in x]
                 buffer.append(tokenizer.decode([period_id] + x[-1].tolist())[1:])
                 if x[-1].item() == tokenizer.eos_id():
                     done_generating = True
@@ -527,21 +533,19 @@ def main(
             def callback(x):
                 nonlocal done_generating
                 if done_generating:
-                    return
-                if not isinstance(x, List):
-                    x = [x]
+                    return done_generating
+                if isinstance(x, torch.Tensor):
+                    if x.numel() <= 1:
+                        x = [x]
+                    else:
+                        x = [val for val in x]
                 if x[-1].item() == tokenizer.eos_id():
                     done_generating = True
-                if stop_token_ids:
-                    # TODO: trim x to match longest encoded stop_word
-                    x = [val.item() for val in x]
+                if stop_words:
+                    x_trimmed = [val.item() for val in x[-longest_stop_word_length:]]
+                    decoded = tokenizer.decode(x_trimmed)
                     for stop_word in stop_words:
-                        # TODO: call tokenizer.decode(x) outside the loop to optimize
-                        if stop_word in tokenizer.decode(x):
-                            done_generating = True
-                            break
-                    for stop_word in stop_token_ids:
-                        if x[-len(stop_word):] == stop_word:
+                        if stop_word in decoded:
                             done_generating = True
                             break
                 return done_generating
