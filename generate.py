@@ -345,7 +345,7 @@ def _load_model(checkpoint_path, device, precision, use_tp, early_exit: int = -1
     checkpoint = torch.load(str(checkpoint_path), mmap=True, weights_only=True)
     if "model" in checkpoint and "stories" in str(checkpoint_path):
         checkpoint = checkpoint["model"]
-    model.load_state_dict(checkpoint, assign=True)
+    model.load_state_dict(checkpoint, assign=True, strict=False)
 
     if use_tp:
         from tp import apply_tp
@@ -453,7 +453,7 @@ def main(
     device_sync(device=device) # MKG
     print(f"Time to load model: {time.time() - t0:.02f} seconds")
 
-    tokenizer = get_tokenizer(tokenizer_path, checkpoint_path)
+    tokenizer = get_tokenizer(tokenizer_path, checkpoint_path.parent.name if model_name is None else model_name)
 
     if stop_words:
         longest_stop_word_length = max([len(tokenizer.encode(stop_word)) for stop_word in stop_words])
