@@ -474,7 +474,7 @@ def main(
             global decode_one_token_early
             decode_one_token_early = torch.compile(decode_one_token_early, mode="reduce-overhead", fullgraph=True)
             global forward_remainder
-            forward_remainder = torch.compile(forward_remainder, mode="reduce-overhead", fullgraph=True)
+            forward_remainder = torch.compile(forward_remainder, fullgraph=True, dynamic=True)
             global forward_early
             forward_early = torch.compile(forward_early, mode="reduce-overhead", fullgraph=True)
 
