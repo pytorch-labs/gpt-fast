@@ -10,12 +10,50 @@ import torch
 import torch.nn as nn
 from torch import Tensor
 from torch.nn import functional as F
+from torch.nn.attention.flex_attention import BlockMask, create_block_mask, flex_attention
 
 
 def find_multiple(n: int, k: int) -> int:
     if n % k == 0:
         return n
     return n + k - (n % k)
+
+
+def causal_mask(b, h, q, kv):
+    return q >= kv
+
+
+class CausalMask:
+    def __init__(self, max_seq_length):
+        self.input_pos = None
+        self.max_seq_length = max_seq_length
+        self.block_masks = create_block_mask(causal_mask, 1, 1, max_seq_length, max_seq_length, device="cuda")
+
+    def decoding_causal_mask(self, b, h, q, kv):
+        offset = self.input_pos[0]
+        return offset + q >= kv
+
+    def get_mask(self, kv_len, input_pos) -> BlockMask:
+        self.input_pos = input_pos
+        offset = self.input_pos // self.block_masks.BLOCK_SIZE[0]
+        max_block_in_kv = (kv_len + self.block_masks.BLOCK_SIZE[1]) // self.block_masks.BLOCK_SIZE[1]
+        new_kv_num_blocks = self.block_masks.kv_num_blocks[:, :, offset]
+        new_kv_indices = self.block_masks.kv_indices[:, :, offset, :max_block_in_kv]
+        new_full_kv_num_blocks = self.block_masks.full_kv_num_blocks[:, :, offset]
+        new_full_kv_indices = self.block_masks.full_kv_indices[:, :, offset, :max_block_in_kv]
+        layer_mask = BlockMask.from_kv_blocks(
+            new_kv_num_blocks,
+            new_kv_indices,
+            new_full_kv_num_blocks,
+            new_full_kv_indices,
+            BLOCK_SIZE=self.block_masks.BLOCK_SIZE,
+            mask_mod=self.decoding_causal_mask,
+        )
+        return layer_mask
+
+    def gen_prefill_mask(self, kv_len, q_len) -> BlockMask:
+        return create_block_mask(causal_mask, 1, 1, q_len, kv_len)
+
 
 @dataclass
 class ModelArgs:
@@ -102,6 +140,7 @@ class Transformer(nn.Module):
         self.mask_cache: Optional[Tensor] = None
         self.max_batch_size = -1
         self.max_seq_length = -1
+        self.causal_mask = CausalMask(config.block_size)
 
     def setup_caches(self, max_batch_size, max_seq_length):
         if self.max_seq_length >= max_seq_length and self.max_batch_size >= max_batch_size:
@@ -120,11 +159,9 @@ class Transformer(nn.Module):
             b.attention.kv_cache = KVCache(max_batch_size, max_seq_length, self.config.n_local_heads, head_dim, dtype)
 
         self.freqs_cis = precompute_freqs_cis(self.config.block_size, self.config.dim // self.config.n_head, self.config.rope_base, dtype)
-        self.causal_mask = torch.tril(torch.ones(self.max_seq_length, self.max_seq_length, dtype=torch.bool))
 
-    def forward(self, idx: Tensor, input_pos: Optional[Tensor] = None) -> Tensor:
+    def _forward(self, mask: BlockMask, idx: Tensor, input_pos: Optional[Tensor] = None) -> Tensor:
         assert self.freqs_cis is not None, "Caches must be initialized first"
-        mask = self.causal_mask[None, None, input_pos]
         freqs_cis = self.freqs_cis[input_pos]
         x = self.tok_embeddings(idx)
 
@@ -133,6 +170,14 @@ class Transformer(nn.Module):
         x = self.norm(x)
         logits = self.output(x)
         return logits
+
+    def forward(self, idx: Tensor, input_pos: Optional[Tensor] = None) -> Tensor:
+        mask = self.causal_mask.get_mask(self.max_seq_length, input_pos)
+        return self._forward(mask, idx, input_pos)
+
+    def prefill(self, idx: Tensor, input_pos: Optional[Tensor] = None) -> Tensor:
+        mask = self.causal_mask.gen_prefill_mask(self.max_seq_length, input_pos.shape[0]) # TODO
+        return self._forward(mask, idx, input_pos)
 
     @classmethod
     def from_name(cls, name: str):
@@ -147,7 +192,7 @@ class TransformerBlock(nn.Module):
         self.ffn_norm = RMSNorm(config.dim, config.norm_eps)
         self.attention_norm = RMSNorm(config.dim, config.norm_eps)
 
-    def forward(self, x: Tensor, input_pos: Tensor, freqs_cis: Tensor, mask: Tensor) -> Tensor:
+    def forward(self, x: Tensor, input_pos: Tensor, freqs_cis: Tensor, mask: BlockMask) -> Tensor:
         h = x + self.attention(self.attention_norm(x), freqs_cis, mask, input_pos)
         out = h + self.feed_forward(self.ffn_norm(h))
         return out
@@ -177,7 +222,7 @@ class Attention(nn.Module):
             wv = state_dict.pop(prefix + "wv.weight")
             state_dict[prefix + "wqkv.weight"] = torch.cat([wq, wk, wv])
 
-    def forward(self, x: Tensor, freqs_cis: Tensor, mask: Tensor, input_pos: Optional[Tensor] = None) -> Tensor:
+    def forward(self, x: Tensor, freqs_cis: Tensor, mask: BlockMask, input_pos: Optional[Tensor] = None) -> Tensor:
         bsz, seqlen, _ = x.shape
 
         kv_size = self.n_local_heads * self.head_dim
@@ -197,7 +242,7 @@ class Attention(nn.Module):
 
         k = k.repeat_interleave(self.n_head // self.n_local_heads, dim=1)
         v = v.repeat_interleave(self.n_head // self.n_local_heads, dim=1)
-        y = F.scaled_dot_product_attention(q, k, v, attn_mask=mask, dropout_p=0.0)
+        y = flex_attention(q, k, v, block_mask=mask, enable_gqa= (self.n_head != self.n_local_heads))
 
         y = y.transpose(1, 2).contiguous().view(bsz, seqlen, self.dim)
 

@@ -56,7 +56,7 @@ def sample(logits, temperature: float = 1.0, top_k: Optional[int] = None):
 
 def prefill(model: Transformer, x: torch.Tensor, input_pos: torch.Tensor, **sampling_kwargs) -> torch.Tensor:
     # input_pos: [B, S]
-    logits = model(x, input_pos)
+    logits = model.prefill(x, input_pos)
     return sample(logits, **sampling_kwargs)[0]
 
 def decode_one_token(model: Transformer, x: torch.Tensor, input_pos: torch.Tensor, **sampling_kwargs) -> Tuple[torch.Tensor, torch.Tensor]:
@@ -68,15 +68,14 @@ def decode_one_token(model: Transformer, x: torch.Tensor, input_pos: torch.Tenso
 def decode_n_tokens(model: Transformer, cur_token: torch.Tensor, input_pos: torch.Tensor, num_new_tokens: int, callback=lambda _: _, **sampling_kwargs):
     new_tokens, new_probs = [], []
     for i in range(num_new_tokens):
-        with torch.backends.cuda.sdp_kernel(enable_flash=False, enable_mem_efficient=False, enable_math=True): # Actually better for Inductor to codegen attention here
-            next_token, next_prob = decode_one_token(
-                model, cur_token, input_pos, **sampling_kwargs
-            )
-            input_pos += 1
-            new_tokens.append(next_token.clone())
-            callback(new_tokens[-1])
-            new_probs.append(next_prob.clone())
-            cur_token = next_token.view(1, -1)
+        next_token, next_prob = decode_one_token(
+            model, cur_token, input_pos, **sampling_kwargs
+        )
+        input_pos += 1
+        new_tokens.append(next_token.clone())
+        callback(new_tokens[-1])
+        new_probs.append(next_prob.clone())
+        cur_token = next_token.view(1, -1)
 
     return new_tokens, new_probs
 
@@ -154,10 +153,12 @@ def generate(
     # create an empty tensor of the expected final shape and fill in the current tokens
     T = prompt.size(0)
     T_new = T + max_new_tokens
+    T_buf = ((T_new - 1) // 128 + 1) * 128 # round up to multiple of 128 to use flex_attention
     if interactive:
+        # TODO: Also make this work with flex decoding
         max_seq_length = 350
     else:
-        max_seq_length = min(T_new, model.config.block_size)
+        max_seq_length = min(T_buf, model.config.block_size)
 
     device, dtype = prompt.device, prompt.dtype
     max_seq_length = max_seq_length + speculate_k + 1 if is_speculative else max_seq_length
@@ -167,7 +168,7 @@ def generate(
             draft_model.setup_caches(max_batch_size=1, max_seq_length=max_seq_length)
 
     # create an empty tensor of the expected final shape and fill in the current tokens
-    empty = torch.empty(T_new, dtype=dtype, device=device)
+    empty = torch.empty(T_buf, dtype=dtype, device=device)
     empty[:T] = prompt
     seq = empty
     input_pos = torch.arange(0, T, device=device)
@@ -198,12 +199,12 @@ def generate(
             next_token = next_tokens[-1]
     else:
         generated_tokens, _ = decode_n_tokens(model, next_token.view(1, -1), input_pos, max_new_tokens - 1, callback=callback, **sampling_kwargs)
-        seq[T + 1:] = torch.cat(generated_tokens)
+        seq[T + 1:T_new] = torch.cat(generated_tokens)
 
     generate_stats = {
         'accept_counts': accept_counts
     }
-    return seq, generate_stats
+    return seq[:T_new], generate_stats
 
 def encode_tokens(tokenizer, string, bos=True, device=default_device):
     tokens = tokenizer.encode(string)
