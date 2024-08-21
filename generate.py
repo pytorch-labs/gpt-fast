@@ -294,8 +294,8 @@ def generate(
             num_added = min(T_new - input_pos - 1, len(next_tokens))
             # TODO: call once instead of a loop
             generation_done = False
-            for i in next_tokens[: num_added,]:
-                callback(i)
+            # for i in next_tokens[: num_added,]:
+            #     callback(i)
             seq[input_pos + 1 : input_pos + num_added + 1] = next_tokens[: num_added]
             if callback(seq[T+1: input_pos+num_added+1]):
                 generation_done = True
