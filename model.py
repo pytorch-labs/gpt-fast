@@ -36,7 +36,7 @@ class CausalMask:
     def get_mask(self, kv_len, input_pos) -> BlockMask:
         self.input_pos = input_pos
         offset = self.input_pos // self.block_masks.BLOCK_SIZE[0]
-        max_block_in_kv = (kv_len + self.block_masks.BLOCK_SIZE[1]) // self.block_masks.BLOCK_SIZE[1]
+        max_block_in_kv = (kv_len - 1) // self.block_masks.BLOCK_SIZE[1] + 1
         new_kv_num_blocks = self.block_masks.kv_num_blocks[:, :, offset]
         new_kv_indices = self.block_masks.kv_indices[:, :, offset, :max_block_in_kv]
         new_full_kv_num_blocks = self.block_masks.full_kv_num_blocks[:, :, offset]
@@ -176,7 +176,7 @@ class Transformer(nn.Module):
         return self._forward(mask, idx, input_pos)
 
     def prefill(self, idx: Tensor, input_pos: Optional[Tensor] = None) -> Tensor:
-        mask = self.causal_mask.gen_prefill_mask(self.max_seq_length, input_pos.shape[0]) # TODO
+        mask = self.causal_mask.gen_prefill_mask(self.max_seq_length, input_pos.shape[0])
         return self._forward(mask, idx, input_pos)
 
     @classmethod
@@ -242,7 +242,7 @@ class Attention(nn.Module):
 
         k = k.repeat_interleave(self.n_head // self.n_local_heads, dim=1)
         v = v.repeat_interleave(self.n_head // self.n_local_heads, dim=1)
-        y = flex_attention(q, k, v, block_mask=mask, enable_gqa= (self.n_head != self.n_local_heads))
+        y = flex_attention(q, k, v, block_mask=mask, enable_gqa=(self.n_head != self.n_local_heads))
 
         y = y.transpose(1, 2).contiguous().view(bsz, seqlen, self.dim)
 
