@@ -54,6 +54,9 @@ def sample(logits, temperature: float = 1.0, top_k: Optional[int] = None):
     idx_next = multinomial_sample_one_no_sync(probs)
     return idx_next, probs
 
+def roundup(val, multiplier):
+    return ((val - 1) // multiplier + 1) * multiplier
+
 def prefill(model: Transformer, x: torch.Tensor, input_pos: torch.Tensor, **sampling_kwargs) -> torch.Tensor:
     # input_pos: [B, S]
     logits = model.prefill(x, input_pos)
@@ -153,10 +156,9 @@ def generate(
     # create an empty tensor of the expected final shape and fill in the current tokens
     T = prompt.size(0)
     T_new = T + max_new_tokens
-    T_buf = ((T_new - 1) // 128 + 1) * 128 # round up to multiple of 128 to use flex_attention
+    T_buf = roundup(T_new, 128) # round up to multiple of 128 to use flex_attention
     if interactive:
-        # TODO: Also make this work with flex decoding
-        max_seq_length = 350
+        max_seq_length = roundup(350, 128)
     else:
         max_seq_length = min(T_buf, model.config.block_size)
 
