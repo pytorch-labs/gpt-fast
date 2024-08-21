@@ -517,11 +517,11 @@ def main(
                     return done_generating
                 if isinstance(x, torch.Tensor):
                     if x.numel() <= 1:
-                        x = [x]
+                        x = [x.item()]
                     else:
-                        x = [val for val in x]
-                buffer.append(tokenizer.decode([period_id] + x[-1].tolist())[1:])
-                if x[-1].item() == tokenizer.eos_id():
+                        x = x.tolist()
+                buffer.append(tokenizer.decode([period_id] + x[-1])[1:])
+                if tokenizer.eos_id() in x:
                     done_generating = True
                 if len(buffer) == 4 or done_generating:
                     print(''.join(buffer), end='', flush=True)
@@ -539,10 +539,14 @@ def main(
                         x = [x.item()]
                     else:
                         x = x.tolist()
-                if x[-1] == tokenizer.eos_id():
+                elif isinstance(x, List):
+                    if isinstance(x[0], torch.Tensor):
+                        x = [val.item() for val in x]
+                if tokenizer.eos_id() in x:
                     done_generating = True
+                    return done_generating
                 if stop_words:
-                    x_trimmed = [val for val in x[-longest_stop_word_length:]]
+                    x_trimmed = x[-longest_stop_word_length:]
                     decoded = tokenizer.decode(x_trimmed)
                     for stop_word in stop_words:
                         if stop_word in decoded:
