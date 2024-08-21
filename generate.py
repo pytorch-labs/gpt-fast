@@ -536,13 +536,13 @@ def main(
                     return done_generating
                 if isinstance(x, torch.Tensor):
                     if x.numel() <= 1:
-                        x = [x]
+                        x = [x.item()]
                     else:
-                        x = [val for val in x]
-                if x[-1].item() == tokenizer.eos_id():
+                        x = x.tolist()
+                if x[-1] == tokenizer.eos_id():
                     done_generating = True
                 if stop_words:
-                    x_trimmed = [val.item() for val in x[-longest_stop_word_length:]]
+                    x_trimmed = [val for val in x[-longest_stop_word_length:]]
                     decoded = tokenizer.decode(x_trimmed)
                     for stop_word in stop_words:
                         if stop_word in decoded:
