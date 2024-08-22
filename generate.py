@@ -460,9 +460,17 @@ def main(
 
     if stop_words:
         stop_words_ids = [tokenizer.encode(stop_word) for stop_word in stop_words]
-        stop_words_ids_length = torch.tensor([len(stop_word_ids) for stop_word_ids in stop_words_ids], device=device)
-        stop_words_ids_first = torch.tensor([stop_word_ids[0] for stop_word_ids in stop_words_ids], device=device)
-    eos_id = torch.tensor(tokenizer.eos_id(), device=device)
+        for i in range(len(stop_words_ids)):
+            stop_word_ids = stop_words_ids[i]
+            # Remove control sequences from stop_ids that are not detected if stop_word exsists in the middle of a sequence
+            for id in stop_word_ids:
+                if tokenizer.encode(tokenizer.decode(id)) == []:
+                    stop_word_ids.remove(id)
+            stop_words_ids[i] = stop_word_ids
+        stop_words_ids_length = [len(stop_word_ids) for stop_word_ids in stop_words_ids]
+        max_stop_words_ids_length = max(stop_words_ids_length)
+        stop_words_ids = [torch.tensor(stop_word_ids, device=device) for stop_word_ids in stop_words_ids]
+    eos_id = torch.tensor([tokenizer.eos_id()], device=device)
 
     if max_seq_len == -1:
         prompt_lengths = [encode_tokens(tokenizer, prompt, bos=True, device=device).size(0) for prompt in prompts]
@@ -528,8 +536,9 @@ def main(
                 nonlocal done_generating
                 if done_generating:
                     return done_generating
-                buffer.append(tokenizer.decode([period_id] + x[-1])[1:])
-                if x.item() == tokenizer.eos_id():
+                # TODO: optimize to handle calling x.item()
+                buffer.append(tokenizer.decode([period_id] + x.item())[1:])
+                if torch.equal(x, eos_id):
                     done_generating = True
                 if len(buffer) == 4 or done_generating:
                     print(''.join(buffer), end='', flush=True)
@@ -538,19 +547,26 @@ def main(
                 return done_generating
         else:
             done_generating = False
+            stop_ids_buffer = torch.empty(0, device=device, dtype=torch.int32)
             def callback(x: torch.Tensor):
-                nonlocal done_generating
+                nonlocal done_generating, stop_ids_buffer
                 if done_generating:
-                    return done_generating
+                    return True
                 if torch.equal(x, eos_id):
                     done_generating = True
-                    return done_generating
+                    return True
                 if stop_words:
-                    partial_matching_stop_words_idx = (stop_words_ids_first == x).nonzero()
-                    if (stop_words_ids_length[partial_matching_stop_words_idx] == 1).any():
-                        done_generating = True
-                        return done_generating
-                return done_generating
+                    stop_ids_buffer = torch.cat([stop_ids_buffer, x])
+                    # for stop_word_ids in stop_words_ids:
+                    #     if torch.equal(stop_ids_buffer[-stop_word_ids.numel():], stop_word_ids):
+                    #         done_generating = True
+                    #         return True
+                    decoded = tokenizer.decode(stop_ids_buffer.tolist())
+                    for stop_word in stop_words:
+                        if stop_word in decoded:
+                            done_generating = True
+                            return True
+                return False
         t0 = time.perf_counter()
         import contextlib
         if (i != num_samples - 1 or not profile) or (use_tp and rank != 0):
