@@ -9,6 +9,7 @@ import sys
 import time
 from pathlib import Path
 from typing import List, Optional, Tuple, Union
+from collections.abc import Iterable
 
 import torch
 import torch._dynamo.config
@@ -406,6 +407,9 @@ def main(
 ) -> None:
     """Generates text samples based on a pre-trained Transformer model and tokenizer.
     """
+    if not isinstance(prompts, Iterable):
+        prompts = [prompts]
+
     assert checkpoint_path.is_file(), checkpoint_path
 
     tokenizer_path = checkpoint_path.parent / "tokenizer.model"
@@ -435,13 +439,6 @@ def main(
             draft_model.layers = draft_model.layers[0:draft_early_exit]
             draft_model.num_layers = draft_early_exit
     elif self_speculative:
-        # Mean Accepted: 1.6445916114790287
-        # Average tokens/sec: 58.78
-        # Memory used: 27.49 GB
-        # draft_model = _load_model(checkpoint_path, device, precision, use_tp, early_exit=early_exit)
-        # Mean Accepted: 9.3109243697479
-        # Average tokens/sec: 92.41
-        # Memory used: 13.89 GB
         draft_model = model
         is_speculative = True
     else:
@@ -458,8 +455,10 @@ def main(
         stop_words_ids_first = torch.tensor([stop_word_ids[0] for stop_word_ids in stop_words_ids], device=device)
     eos_id = torch.tensor(tokenizer.eos_id(), device=device)
 
-    encoded = encode_tokens(tokenizer, prompts[0] if isinstance(prompts, List) else prompts, bos=True, device=device)
-    prompt_length = encoded.size(0)
+    if max_seq_len == -1:
+        prompt_lengths = [encode_tokens(tokenizer, prompt, bos=True, device=device).size(0) for prompt in prompts]
+        max_prompt_length = max(prompt_lengths)
+        max_seq_len = max_prompt_length + max_new_tokens
 
     torch.manual_seed(1234)
     model_size = _get_model_size(model)
@@ -492,6 +491,7 @@ def main(
         'time_for_inference': []
     }
     start = -1 if compile else 0
+    prompt = prompts[0]
     max_seq_len_check = -1
 
     if log_generations:
@@ -499,13 +499,17 @@ def main(
 
     for i in range(start, num_samples):
         device_sync(device=device) # MKG
-        if i >= 0 and (interactive or isinstance(prompts, List)):
-            prompt = prompts[i] if isinstance(prompts, List) else input("What is your prompt? ")
-            if is_chat:
-                prompt = f"{B_INST} {prompt.strip()} {E_INST}"
-            max_seq_len_check = max(max_seq_len_check, len(prompt))
-            encoded = encode_tokens(tokenizer, prompt, bos=True, device=device)
-            prompt_length = encoded.size(0)
+        if i >= 0:
+            if interactive:
+                prompt = input("What is your prompt? ")
+                if is_chat:
+                    prompt = f"{B_INST} {prompt.strip()} {E_INST}"
+            else:
+                if i < len(prompts):
+                    prompt = prompts[i]
+        max_seq_len_check = max(max_seq_len_check, len(prompt))
+        encoded = encode_tokens(tokenizer, prompt, bos=True, device=device)
+        prompt_length = encoded.size(0)
 
         if interactive and i >= 0:
             buffer = []
