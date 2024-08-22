@@ -105,7 +105,9 @@ def decode_n_tokens(model: Transformer, cur_token: torch.Tensor, input_pos: torc
                 )
             input_pos += 1
             new_tokens.append(next_token.clone())
-            if callback(new_tokens):
+            # new_tokens_ints.append(next_token.item())
+            # if callback(new_tokens_ints):
+            if callback(next_token):
                 break
             new_probs.append(next_prob.clone())
             cur_token = next_token.view(1, -1)
@@ -457,6 +459,7 @@ def main(
 
     if stop_words:
         longest_stop_word_length = max([len(tokenizer.encode(stop_word)) for stop_word in stop_words])
+    eos_id = torch.tensor(tokenizer.eos_id(), device=device)
 
     encoded = encode_tokens(tokenizer, prompts[0] if isinstance(prompts, List) else prompts, bos=True, device=device)
     prompt_length = encoded.size(0)
@@ -511,17 +514,12 @@ def main(
             buffer = []
             period_id = tokenizer.encode('.')[0]
             done_generating = False
-            def callback(x):
+            def callback(x: torch.Tensor):
                 nonlocal done_generating
                 if done_generating:
                     return done_generating
-                if isinstance(x, torch.Tensor):
-                    if x.numel() <= 1:
-                        x = [x.item()]
-                    else:
-                        x = x.tolist()
                 buffer.append(tokenizer.decode([period_id] + x[-1])[1:])
-                if tokenizer.eos_id() in x:
+                if x.item() == tokenizer.eos_id():
                     done_generating = True
                 if len(buffer) == 4 or done_generating:
                     print(''.join(buffer), end='', flush=True)
@@ -530,28 +528,13 @@ def main(
                 return done_generating
         else:
             done_generating = False
-            def callback(x):
+            def callback(x: torch.Tensor):
                 nonlocal done_generating
                 if done_generating:
                     return done_generating
-                if isinstance(x, torch.Tensor):
-                    if x.numel() <= 1:
-                        x = [x.item()]
-                    else:
-                        x = x.tolist()
-                elif isinstance(x, List):
-                    if isinstance(x[0], torch.Tensor):
-                        x = [val.item() for val in x]
-                if tokenizer.eos_id() in x:
+                if torch.equal(x, eos_id):
                     done_generating = True
-                    return done_generating
-                if stop_words:
-                    x_trimmed = x[-longest_stop_word_length:]
-                    decoded = tokenizer.decode(x_trimmed)
-                    for stop_word in stop_words:
-                        if stop_word in decoded:
-                            done_generating = True
-                            break
+                # print(, end='', flush=True)
                 return done_generating
         t0 = time.perf_counter()
         import contextlib
