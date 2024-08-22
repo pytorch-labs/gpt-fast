@@ -453,7 +453,9 @@ def main(
     tokenizer = get_tokenizer(tokenizer_path, checkpoint_path.parent.name if model_name is None else model_name)
 
     if stop_words:
-        longest_stop_word_length = max([len(tokenizer.encode(stop_word)) for stop_word in stop_words])
+        stop_words_ids = [tokenizer.encode(stop_word) for stop_word in stop_words]
+        stop_words_ids_length = torch.tensor([len(stop_word_ids) for stop_word_ids in stop_words_ids], device=device)
+        stop_words_ids_first = torch.tensor([stop_word_ids[0] for stop_word_ids in stop_words_ids], device=device)
     eos_id = torch.tensor(tokenizer.eos_id(), device=device)
 
     encoded = encode_tokens(tokenizer, prompts[0] if isinstance(prompts, List) else prompts, bos=True, device=device)
@@ -529,7 +531,12 @@ def main(
                     return done_generating
                 if torch.equal(x, eos_id):
                     done_generating = True
-                # print(, end='', flush=True)
+                    return done_generating
+                if stop_words:
+                    partial_matching_stop_words_idx = (stop_words_ids_first == x).nonzero()
+                    if (stop_words_ids_length[partial_matching_stop_words_idx] == 1).any():
+                        done_generating = True
+                        return done_generating
                 return done_generating
         t0 = time.perf_counter()
         import contextlib
