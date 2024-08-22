@@ -304,7 +304,7 @@ def generate(
             num_added = min(T_new - input_pos - 1, len(next_tokens))
             generation_done = False
             for i in next_tokens[: num_added,]:
-                callback(i)
+                generation_done = callback(i)
             seq[input_pos + 1 : input_pos + num_added + 1] = next_tokens[: num_added]
             input_pos = input_pos + num_added
             next_token = next_tokens[-1]
