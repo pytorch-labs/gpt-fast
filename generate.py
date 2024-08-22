@@ -256,12 +256,22 @@ def generate(
     max_seq_length = max_seq_length + speculate_k + 1 if is_speculative else max_seq_length
     print("\nSetting max_seq_length to ", max_seq_length)
 
+    # truncate to avoid error
+    if T_new > max_seq_length:
+        T_new = max_seq_length
+
     device, dtype = prompt.device, prompt.dtype
+
+    accept_counts = [0] * (speculate_k + 1)
 
     with torch.device(device):
         model.setup_caches(max_batch_size=1, max_seq_length=max_seq_length)
         if is_speculative and draft_model is not model:
             draft_model.setup_caches(max_batch_size=1, max_seq_length=max_seq_length)
+
+    if T > max_seq_length:
+        print(f"WARNING: size of prompt {prompt.size()} is greater than max_seq_length {max_seq_length}. Not generating tokens for this sample.")
+        return prompt, {'accept_counts': 0}
 
     # create an empty tensor of the expected final shape and fill in the current tokens
     empty = torch.empty(T_new, dtype=dtype, device=device)
@@ -275,7 +285,6 @@ def generate(
     seq[T] = next_token
 
     input_pos = torch.tensor([T], device=device, dtype=torch.int)
-    accept_counts = [0] * (speculate_k + 1)
 
     if is_speculative:
         input_pos = input_pos.item()  # for speculative decoding easier to keep on host
