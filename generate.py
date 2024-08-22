@@ -105,8 +105,6 @@ def decode_n_tokens(model: Transformer, cur_token: torch.Tensor, input_pos: torc
                 )
             input_pos += 1
             new_tokens.append(next_token.clone())
-            # new_tokens_ints.append(next_token.item())
-            # if callback(new_tokens_ints):
             if callback(next_token):
                 break
             new_probs.append(next_prob.clone())
@@ -294,13 +292,10 @@ def generate(
 
             accept_counts[len(next_tokens) - 1] += 1
             num_added = min(T_new - input_pos - 1, len(next_tokens))
-            # TODO: call once instead of a loop
             generation_done = False
-            # for i in next_tokens[: num_added,]:
-            #     callback(i)
+            for i in next_tokens[: num_added,]:
+                callback(i)
             seq[input_pos + 1 : input_pos + num_added + 1] = next_tokens[: num_added]
-            if callback(seq[T+1: input_pos+num_added+1]):
-                generation_done = True
             input_pos = input_pos + num_added
             next_token = next_tokens[-1]
 
