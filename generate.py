@@ -611,10 +611,10 @@ def main(
         t = time.perf_counter() - t0
 
         if not interactive:
-            y = y.tolist()
-            if tokenizer.eos_id() in y:
-                y = y[:y.index(tokenizer.eos_id()) + 1]
-            decoded = tokenizer.decode(y)
+            y_dec = y.tolist()
+            if tokenizer.eos_id() in y_dec:
+                y_dec = y_dec[:y_dec.index(tokenizer.eos_id()) + 1]
+            decoded = tokenizer.decode(y_dec)
             if stop_words:
                 decoded = prompt + stop_at_stop_words(decoded.removeprefix(prompt), stop_words)
             print(decoded)
