@@ -552,7 +552,7 @@ def main(
         else:
             done_generating = False
             stop_ids_buffer = torch.empty(0, device=device, dtype=torch.int32)
-            check_stop_words_period = 3
+            check_stop_words_period = 2
             def callback(x: torch.Tensor):
                 nonlocal done_generating, stop_ids_buffer, check_stop_words_period
                 if done_generating:
