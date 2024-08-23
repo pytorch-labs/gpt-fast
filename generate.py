@@ -566,6 +566,8 @@ def main(
                         if stop_word in decoded:
                             done_generating = True
                             return True
+                    if stop_ids_buffer.numel() > max_stop_words_ids_length:
+                        stop_ids_buffer = stop_ids_buffer[:max_stop_words_ids_length]
                 return False
         t0 = time.perf_counter()
         import contextlib
