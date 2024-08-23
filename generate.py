@@ -374,6 +374,7 @@ def _get_model_size(model):
             )
     return model_size
 
+# TODO: add more details from where it got copied
 def stop_at_stop_words(decoded_string, stop_words):
     """
     Produces the prefix of decoded_string that ends at the first occurrence of
@@ -467,7 +468,7 @@ def main(
                 if tokenizer.encode(tokenizer.decode(id)) == []:
                     stop_word_ids.remove(id)
             stop_words_ids[i] = stop_word_ids
-        stop_words_ids.append([tokenizer.eos_id()])
+        # stop_words_ids.append([tokenizer.eos_id()])
         stop_words_ids_length = torch.tensor([len(stop_word_ids) for stop_word_ids in stop_words_ids], device=device)
         max_stop_words_ids_length = max(stop_words_ids_length)
         stop_words_ids = [torch.tensor(stop_word_ids, device=device) for stop_word_ids in stop_words_ids]
