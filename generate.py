@@ -560,19 +560,19 @@ def main(
                 if stop_words:
                     stop_ids_buffer = torch.cat([stop_ids_buffer, x])
                     if stop_ids_buffer.numel() >= max_stop_words_ids_length * check_stop_words_period:
-                        # Check stop words by ids
-                        buffer_to_check = stop_ids_buffer.repeat(len(stop_words_ids), 1)
-                        stop_words_match = (buffer_to_check == stop_words_to_compare).sum(dim=1)
-                        if torch.any(stop_words_match >= stop_words_ids_length):
-                            done_generating = True
-                            return True
+                        ## Check stop words by ids
+                        # buffer_to_check = stop_ids_buffer.repeat(len(stop_words_ids), 1)
+                        # stop_words_match = (buffer_to_check == stop_words_to_compare).sum(dim=1)
+                        # if torch.any(stop_words_match >= stop_words_ids_length):
+                        #     done_generating = True
+                        #     return True
 
-                        ## Check stop words by string
-                        # decoded = tokenizer.decode(stop_ids_buffer.tolist())
-                        # for stop_word in stop_words:
-                        #     if stop_word in decoded:
-                        #         done_generating = True
-                        #         return True
+                        # Check stop words by string
+                        decoded = tokenizer.decode(stop_ids_buffer.tolist())
+                        for stop_word in stop_words:
+                            if stop_word in decoded:
+                                done_generating = True
+                                return True
 
                         stop_ids_buffer = stop_ids_buffer[(check_stop_words_period - 1) * max_stop_words_ids_length:]
                 return False
