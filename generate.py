@@ -105,9 +105,8 @@ def decode_n_tokens(model: Transformer, cur_token: torch.Tensor, input_pos: torc
                     model, cur_token, input_pos, **sampling_kwargs
                 )
             input_pos += 1
-            next_token_scalar = next_token.item()
-            new_tokens.append(next_token_scalar)
-            if callback(next_token_scalar):
+            new_tokens.append(next_token.clone())
+            if callback(next_token):
                 break
             new_probs.append(next_prob.clone())
             cur_token = next_token.view(1, -1)
@@ -136,7 +135,7 @@ def self_speculative_decode(
     orig_input_pos = torch.tensor([input_pos], dtype=torch.int64, device=cur_token.device)
     draft_tokens, draft_probs = decode_n_tokens(model, cur_token.view(1, -1), orig_input_pos.clone(), speculate_k, **sampling_kwargs)
 
-    draft_tokens = torch.tensor(draft_tokens, device=device)
+    draft_tokens = torch.cat(draft_tokens)
     # parallel inference on target model using draft tokens
     target_logits = forward_remainder(
         model,
@@ -186,7 +185,7 @@ def speculative_decode(
     orig_input_pos = torch.tensor([input_pos], dtype=torch.int64, device=cur_token.device)
     draft_tokens, draft_probs = decode_n_tokens(draft_model, cur_token.view(1, -1), orig_input_pos.clone(), speculate_k, **sampling_kwargs)
 
-    draft_tokens = torch.tensor(draft_tokens, device=device)
+    draft_tokens = torch.cat(draft_tokens)
     # parallel inference on target model using draft tokens
     target_logits = model_forward(
         model,
@@ -315,7 +314,7 @@ def generate(
         seq = seq[:input_pos]
     else:
         generated_tokens, _ = decode_n_tokens(model, next_token.view(1, -1), input_pos, max_new_tokens - 1, callback=callback, **sampling_kwargs)
-        seq[T + 1: T + 1 + len(generated_tokens)] = torch.tensor(generated_tokens, device=device)
+        seq[T + 1: T + 1 + len(generated_tokens)] = torch.cat(generated_tokens)
         seq = seq[:T + 1 + len(generated_tokens)]
 
     generate_stats = {
@@ -551,36 +550,29 @@ def main(
                 return done_generating
         else:
             done_generating = False
-            stop_ids_buffer = []
-            check_stop_words_period = 4
+            stop_ids_buffer = torch.empty(0, device=device, dtype=torch.int32)
+            check_stop_words_period = 3
             def callback(x: torch.Tensor):
                 nonlocal done_generating, stop_ids_buffer, check_stop_words_period
                 if done_generating:
                     return True
-                ## Commented for being inefficient
-                # if torch.equal(x, eos_id):
-                #     done_generating = True
-                #     return True
                 if stop_words:
-                    stop_ids_buffer.append(x)
-                    ## Commented for being inefficient
-                    # if stop_ids_buffer.numel() > max_stop_words_ids_length:
-                    #     stop_ids_buffer = stop_ids_buffer[-max_stop_words_ids_length:]
-                    # if stop_ids_buffer.numel() == max_stop_words_ids_length:
-                    #     buffer_to_check = stop_ids_buffer.repeat(len(stop_words_ids), 1)
-                    #     stop_words_match = (buffer_to_check == stop_words_to_compare).sum(dim=1)
-                    #     if torch.any(stop_words_match >= stop_words_ids_length):
-                    #         done_generating = True
-                    #         return True
-                    if len(stop_ids_buffer) >= max_stop_words_ids_length * check_stop_words_period:
-                        if tokenizer.eos_id() in stop_ids_buffer:
+                    stop_ids_buffer = torch.cat([stop_ids_buffer, x])
+                    if stop_ids_buffer.numel() >= max_stop_words_ids_length * check_stop_words_period:
+                        # Check stop words by ids
+                        buffer_to_check = stop_ids_buffer.repeat(len(stop_words_ids), 1)
+                        stop_words_match = (buffer_to_check == stop_words_to_compare).sum(dim=1)
+                        if torch.any(stop_words_match >= stop_words_ids_length):
                             done_generating = True
                             return True
-                        decoded = tokenizer.decode(stop_ids_buffer)
-                        for stop_word in stop_words:
-                            if stop_word in decoded:
-                                done_generating = True
-                                return True
+
+                        ## Check stop words by string
+                        # decoded = tokenizer.decode(stop_ids_buffer.tolist())
+                        # for stop_word in stop_words:
+                        #     if stop_word in decoded:
+                        #         done_generating = True
+                        #         return True
+
                         stop_ids_buffer = stop_ids_buffer[(check_stop_words_period - 1) * max_stop_words_ids_length:]
                 return False
         t0 = time.perf_counter()
