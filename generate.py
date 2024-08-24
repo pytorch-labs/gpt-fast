@@ -507,8 +507,7 @@ def main(
     prompt = prompts[0]
     max_seq_len_check = -1
 
-    if log_generations:
-        generations = []
+    generations = []
 
     for i in range(start, num_samples):
         device_sync(device=device) # MKG
@@ -617,8 +616,7 @@ def main(
             if stop_words:
                 decoded = prompt + stop_at_stop_words(decoded.removeprefix(prompt), stop_words)
             print(decoded)
-            if log_generations:
-                generations.append([decoded])
+            generations.append([decoded])
         else:
             print()
         tokens_sec = tokens_generated / t
@@ -656,7 +654,7 @@ def main(
         with open(log_generations, "w") as f:
             json.dump(generations, f)
 
-    return aggregate_metrics
+    return aggregate_metrics, generations
 
 
 if __name__ == '__main__':
