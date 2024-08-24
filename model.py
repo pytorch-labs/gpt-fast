@@ -19,7 +19,7 @@ def find_multiple(n: int, k: int) -> int:
 
 @dataclass
 class ModelArgs:
-    block_size: int = 2048
+    block_size: int = 4096
     vocab_size: int = 32000
     n_layer: int = 32
     n_head: int = 32
