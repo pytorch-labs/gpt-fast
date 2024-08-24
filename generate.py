@@ -302,13 +302,11 @@ def generate(
 
             accept_counts[len(next_tokens) - 1] += 1
             num_added = min(T_new - input_pos - 1, len(next_tokens))
-            generation_done = False
-            for i in next_tokens[: num_added,]:
-                generation_done = callback(i.unsqueeze(dim=0))
             seq[input_pos + 1 : input_pos + num_added + 1] = next_tokens[: num_added]
             input_pos = input_pos + num_added
             next_token = next_tokens[-1]
 
+            generation_done = callback(seq[:input_pos])
             if generation_done:
                 break
         seq = seq[:input_pos]
@@ -552,28 +550,32 @@ def main(
             done_generating = False
             stop_ids_buffer = torch.empty(0, device=device, dtype=torch.int32)
             check_stop_words_period = 5
+            last_check_length = 0
             def callback(x: torch.Tensor):
-                nonlocal done_generating, stop_ids_buffer, check_stop_words_period
+                nonlocal done_generating, stop_ids_buffer, check_stop_words_period, last_check_length
                 if done_generating:
                     return True
                 if stop_words:
-                    stop_ids_buffer = torch.cat([stop_ids_buffer, x])
-                    if stop_ids_buffer.numel() >= max_stop_words_ids_length * check_stop_words_period:
+                    # stop_ids_buffer = torch.cat([stop_ids_buffer, x])
+                    # if stop_ids_buffer.numel() >= max_stop_words_ids_length * check_stop_words_period:
+                    if x.numel() > last_check_length + (max_stop_words_ids_length * check_stop_words_period):
                         ## Check stop words by ids
                         # buffer_to_check = stop_ids_buffer.repeat(len(stop_words_ids), 1)
                         # stop_words_match = (buffer_to_check == stop_words_to_compare).sum(dim=1)
                         # if torch.any(stop_words_match >= stop_words_ids_length):
                         #     done_generating = True
                         #     return True
-
+                        x_slice = x[-max_stop_words_ids_length * check_stop_words_period:]
                         # Check stop words by string
-                        decoded = tokenizer.decode(stop_ids_buffer.tolist())
+                        decoded = tokenizer.decode(x_slice.tolist())
                         for stop_word in stop_words:
                             if stop_word in decoded:
                                 done_generating = True
                                 return True
+                        
+                        last_check_length = x.numel()
 
-                        stop_ids_buffer = stop_ids_buffer[(check_stop_words_period - 1) * max_stop_words_ids_length:]
+                        # stop_ids_buffer = stop_ids_buffer[(check_stop_words_period - 1) * max_stop_words_ids_length:]
                 return False
         t0 = time.perf_counter()
         import contextlib
