@@ -1,3 +1,4 @@
+import os
 import torch
 
 from generate import main as generate_samples
@@ -51,7 +52,11 @@ if __name__ == '__main__':
         args.speculate_k, args.self_speculative, args.early_exit, args.device, args.log_results, args.log_generations, args.model_name, stop_words, args.max_seq_len
     )
 
+    # Post process results
+    generations = [task.postprocess_generation(gen[0], idx) for idx, gen in enumerate(generations)]
+
     # Evaluate results
+    os.environ["HF_ALLOW_CODE_EVAL"] = "1"
     results = task.process_results(generations, references)
 
     print(results)
