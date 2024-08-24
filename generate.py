@@ -473,11 +473,6 @@ def main(
         stop_words_to_compare = torch.nn.utils.rnn.pad_sequence([ids.flip(dims=[0]) for ids in stop_words_ids], batch_first=True).flip(dims=[1])
     eos_id = torch.tensor([tokenizer.eos_id()], device=device)
 
-    if max_seq_len == -1:
-        prompt_lengths = [encode_tokens(tokenizer, prompt, bos=True, device=device).size(0) for prompt in prompts]
-        max_prompt_length = max(prompt_lengths)
-        max_seq_len = max_prompt_length + max_new_tokens
-
     torch.manual_seed(1234)
     model_size = _get_model_size(model)
     if compile:
