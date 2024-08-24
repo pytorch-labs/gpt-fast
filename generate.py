@@ -289,14 +289,15 @@ def generate(
         input_pos = input_pos.item()  # for speculative decoding easier to keep on host
         while input_pos < T_new - 1:
             cur_token = next_token.view(())
+            num_next_tokens = min(speculate_k, max(0, max_seq_length - input_pos))
 
             if is_self_speculative:
                 next_tokens = self_speculative_decode(
-                    model, cur_token, input_pos, speculate_k, **sampling_kwargs
+                    model, cur_token, input_pos, num_next_tokens, **sampling_kwargs
                 )
             else:
                 next_tokens = speculative_decode(
-                    model, draft_model, cur_token, input_pos, speculate_k, **sampling_kwargs
+                    model, draft_model, cur_token, input_pos, num_next_tokens, **sampling_kwargs
                 )
 
             accept_counts[len(next_tokens) - 1] += 1
@@ -310,7 +311,7 @@ def generate(
                 break
         seq = seq[:input_pos]
     else:
-        generated_tokens, _ = decode_n_tokens(model, next_token.view(1, -1), input_pos, max_new_tokens - 1, callback=callback, **sampling_kwargs)
+        generated_tokens, _ = decode_n_tokens(model, next_token.view(1, -1), input_pos, T_new - T - 1, callback=callback, **sampling_kwargs)
         seq[T + 1: T + 1 + len(generated_tokens)] = torch.cat(generated_tokens)
         seq = seq[:T + 1 + len(generated_tokens)]
 
