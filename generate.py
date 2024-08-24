@@ -472,7 +472,6 @@ def main(
         stop_words_ids_length = torch.tensor([len(stop_word_ids) for stop_word_ids in stop_words_ids], device=device)
         max_stop_words_ids_length = max(stop_words_ids_length)
         stop_words_ids = [torch.tensor(stop_word_ids, device=device) for stop_word_ids in stop_words_ids]
-        # stop_words_to_compare = torch.nn.utils.rnn.pad_sequence(stop_words_ids, batch_first=True)
         stop_words_to_compare = torch.nn.utils.rnn.pad_sequence([ids.flip(dims=[0]) for ids in stop_words_ids], batch_first=True).flip(dims=[1])
     eos_id = torch.tensor([tokenizer.eos_id()], device=device)
 
@@ -552,7 +551,7 @@ def main(
         else:
             done_generating = False
             stop_ids_buffer = torch.empty(0, device=device, dtype=torch.int32)
-            check_stop_words_period = 2
+            check_stop_words_period = 5
             def callback(x: torch.Tensor):
                 nonlocal done_generating, stop_ids_buffer, check_stop_words_period
                 if done_generating:
