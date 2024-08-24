@@ -106,7 +106,7 @@ def decode_n_tokens(model: Transformer, cur_token: torch.Tensor, input_pos: torc
                 )
             input_pos += 1
             new_tokens.append(next_token.clone())
-            if callback(next_token):
+            if callback(new_tokens):
                 break
             new_probs.append(next_prob.clone())
             cur_token = next_token.view(1, -1)
@@ -551,31 +551,33 @@ def main(
             stop_ids_buffer = torch.empty(0, device=device, dtype=torch.int32)
             check_stop_words_period = 5
             last_check_length = 0
-            def callback(x: torch.Tensor):
+            def callback(x: Union[torch.Tensor, List[torch.Tensor]]):
                 nonlocal done_generating, stop_ids_buffer, check_stop_words_period, last_check_length
                 if done_generating:
                     return True
                 if stop_words:
-                    # stop_ids_buffer = torch.cat([stop_ids_buffer, x])
-                    # if stop_ids_buffer.numel() >= max_stop_words_ids_length * check_stop_words_period:
-                    if x.numel() > last_check_length + (max_stop_words_ids_length * check_stop_words_period):
-                        ## Check stop words by ids
-                        # buffer_to_check = stop_ids_buffer.repeat(len(stop_words_ids), 1)
-                        # stop_words_match = (buffer_to_check == stop_words_to_compare).sum(dim=1)
-                        # if torch.any(stop_words_match >= stop_words_ids_length):
-                        #     done_generating = True
-                        #     return True
-                        x_slice = x[-max_stop_words_ids_length * check_stop_words_period:]
-                        # Check stop words by string
-                        decoded = tokenizer.decode(x_slice.tolist())
-                        for stop_word in stop_words:
-                            if stop_word in decoded:
-                                done_generating = True
-                                return True
-
-                        last_check_length = x.numel()
-
-                        # stop_ids_buffer = stop_ids_buffer[(check_stop_words_period - 1) * max_stop_words_ids_length:]
+                    if isinstance(x, list):
+                        if len(x) > last_check_length + (max_stop_words_ids_length * check_stop_words_period):
+                            x_slice = x[-max_stop_words_ids_length * check_stop_words_period:]
+                            # Check stop words by string
+                            decoded = tokenizer.decode(torch.cat(x_slice).tolist())
+                            for stop_word in stop_words:
+                                if stop_word in decoded:
+                                    done_generating = True
+                                    return True
+                            last_check_length = len(x)
+                    elif isinstance(x, torch.Tensor):
+                        if x.numel() > last_check_length + (max_stop_words_ids_length * check_stop_words_period):
+                            x_slice = x[-max_stop_words_ids_length * check_stop_words_period:]
+                            # Check stop words by string
+                            decoded = tokenizer.decode(x_slice.tolist())
+                            for stop_word in stop_words:
+                                if stop_word in decoded:
+                                    done_generating = True
+                                    return True
+                            last_check_length = x.numel()
+                    else:
+                        raise ValueError(f"Unsupported type for x: {type(x)}")
                 return False
         t0 = time.perf_counter()
         import contextlib
