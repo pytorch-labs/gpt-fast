@@ -572,7 +572,7 @@ def main(
                             if stop_word in decoded:
                                 done_generating = True
                                 return True
-                        
+
                         last_check_length = x.numel()
 
                         # stop_ids_buffer = stop_ids_buffer[(check_stop_words_period - 1) * max_stop_words_ids_length:]
@@ -610,6 +610,7 @@ def main(
                 prof.export_chrome_trace(f"{profile}.json")
         device_sync(device=device) # MKG
         t = time.perf_counter() - t0
+        tokens_generated = y.size(0) - prompt_length
 
         if not interactive:
             y_dec = y.tolist()
@@ -623,11 +624,12 @@ def main(
                 generations.append([decoded])
         else:
             print()
-        tokens_generated = len(y) - prompt_length
         tokens_sec = tokens_generated / t
         aggregate_metrics['tokens_per_sec'].append(tokens_sec)
         aggregate_metrics['time_for_inference'].append(t)
+        tokens_generated_filtered = len(y_dec) - prompt_length
         print(f"Time for inference {i + 1}: {t:.02f} sec total, {tokens_sec:.02f} tokens/sec")
+        print(f"Tokens generated: {tokens_generated}. Tokens after filtering: {tokens_generated_filtered}")
         print(f"Bandwidth achieved: {model_size * tokens_sec / 1e9:.02f} GB/s")
     print("==========")
     print("max_seq_len_check: ", max_seq_len_check)
