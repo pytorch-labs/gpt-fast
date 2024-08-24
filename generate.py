@@ -234,6 +234,7 @@ def generate(
     is_self_speculative: bool = False,
     callback = lambda x: False,
     max_seq_len: Optional[int] = -1,
+    margin_seq_length: Optional[int] = 10,
     **sampling_kwargs
 ) -> torch.Tensor:
     """
@@ -241,40 +242,38 @@ def generate(
     """
 
     is_speculative = draft_model is not None
-    # create an empty tensor of the expected final shape and fill in the current tokens
-    T = prompt.size(0)
-    T_new = T + max_new_tokens
 
+    # Deduce maximum sequence length
     if max_seq_len == -1:
         if interactive:
             max_seq_length = 350
         else:
-            max_seq_length = min(T_new, model.config.block_size)
+            max_seq_length = min(prompt.size(0) + max_new_tokens, model.config.block_size)
     else:
         max_seq_length = max_seq_len
-
     max_seq_length = max_seq_length + speculate_k + 1 if is_speculative else max_seq_length
-    print("\nSetting max_seq_length to ", max_seq_length)
 
-    # truncate to avoid error
-    if T_new > max_seq_length:
-        T_new = max_seq_length
+    # create an empty tensor of the expected final shape and fill in the current tokens
+    T = prompt.size(0)
+    T_new = max_seq_length
+    print(f"\nPrompt length: {T}. Setting max_seq_length to {T_new}")
 
     device, dtype = prompt.device, prompt.dtype
 
     accept_counts = [0] * (speculate_k + 1)
 
     with torch.device(device):
-        model.setup_caches(max_batch_size=1, max_seq_length=max_seq_length)
+        # add margin when creating cache to avoid error:
+        model.setup_caches(max_batch_size=1, max_seq_length=max_seq_length + margin_seq_length)
         if is_speculative and draft_model is not model:
-            draft_model.setup_caches(max_batch_size=1, max_seq_length=max_seq_length)
+            draft_model.setup_caches(max_batch_size=1, max_seq_length=max_seq_length + margin_seq_length)
 
     if T > max_seq_length:
         print(f"WARNING: size of prompt {prompt.size()} is greater than max_seq_length {max_seq_length}. Not generating tokens for this sample.")
         return prompt, {'accept_counts': 0}
 
     # create an empty tensor of the expected final shape and fill in the current tokens
-    empty = torch.empty(T_new, dtype=dtype, device=device)
+    empty = torch.empty(T_new + margin_seq_length, dtype=dtype, device=device)
     empty[:T] = prompt
     seq = empty
     input_pos = torch.arange(0, T, device=device)
