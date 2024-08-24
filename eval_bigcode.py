@@ -39,6 +39,7 @@ if __name__ == '__main__':
 
     # Prepare data
     task = bigcode_eval.tasks.get_task(args.task)
+    task.k = [1]
     dataset = task.get_dataset()
     num_samples = len(dataset) if args.num_samples is None else args.num_samples
     prompts = [task.get_prompt(dataset[i]) for i in range(num_samples)]
@@ -53,7 +54,8 @@ if __name__ == '__main__':
     )
 
     # Post process results
-    generations = [task.postprocess_generation(gen[0], idx) for idx, gen in enumerate(generations)]
+    # generations is a nested list. BigCode expects a nested list: multiple candidates per code sample.
+    generations = [[task.postprocess_generation(gen, idx) for gen in candidates] for idx, candidates in enumerate(generations)]
 
     # Evaluate results
     os.environ["HF_ALLOW_CODE_EVAL"] = "1"
