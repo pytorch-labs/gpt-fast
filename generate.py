@@ -306,7 +306,7 @@ def generate(
             input_pos = input_pos + num_added
             next_token = next_tokens[-1]
 
-            generation_done = callback(seq[:input_pos])
+            generation_done = callback(seq[T+1:input_pos])
             if generation_done:
                 break
         seq = seq[:input_pos]
