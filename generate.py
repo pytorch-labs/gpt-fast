@@ -628,34 +628,40 @@ def main(
         print(f"Time for inference {i + 1}: {t:.02f} sec total, {tokens_sec:.02f} tokens/sec")
         print(f"Tokens generated: {tokens_generated}. Tokens after filtering: {tokens_generated_filtered}")
         print(f"Bandwidth achieved: {model_size * tokens_sec / 1e9:.02f} GB/s")
+    aggregate_metrics["memory_used"] = torch.cuda.max_memory_reserved()
     print("==========")
     print("max_seq_len_check: ", max_seq_len_check)
 
     # Remove metrics for generations of length 0 so that they don't skew performance metrics
     zero_indices = [idx for idx, tokens_generated in enumerate(aggregate_metrics['tokens_generated']) if tokens_generated==0]
+    zero_indices.sort(reverse=True)
     for values in aggregate_metrics.values():
-        for zero_index in zero_indices:
-            del values[zero_index]
+        if isinstance(values, Iterable):
+            for zero_index in zero_indices:
+                del values[zero_index]
 
     # Calculate Average of Metrics
+    average_metrics = {}
     if is_speculative:
         print(aggregate_metrics)
         counts_aggregated = [sum(i) for i in zip(*aggregate_metrics['accept_counts'])]
         acceptance_probs = [i/sum(counts_aggregated) for i in counts_aggregated]
-        print(f"Acceptance probs: {acceptance_probs}")
-        print(f"Mean Accepted: {sum([idx * i for idx, i in enumerate(counts_aggregated)])/sum(counts_aggregated)}")
+        average_metrics["Acceptance probs"] = acceptance_probs
+        average_metrics["Mean Accepted"] = sum([idx * i for idx, i in enumerate(counts_aggregated)])/sum(counts_aggregated)
 
-    print(f"Average tokens/sec: {torch.mean(torch.tensor(aggregate_metrics['tokens_per_sec'])).item():.2f}")
-    print(f"Average timer for inference: {torch.mean(torch.tensor(aggregate_metrics['time_for_inference'])).item():.2f}")
-    print(f"Memory used: {torch.cuda.max_memory_reserved() / 1e9:.02f} GB")
-    aggregate_metrics["memory_used"] = torch.cuda.max_memory_reserved()
+    average_metrics["Average tokens/sec"] = torch.mean(torch.tensor(aggregate_metrics['tokens_per_sec'])).item()
+    average_metrics["Average timer for inference"] = torch.mean(torch.tensor(aggregate_metrics['time_for_inference'])).item()
+    average_metrics["Average timer for inference"] = torch.mean(torch.tensor(aggregate_metrics['time_for_inference'])).item()
+    average_metrics["Memory used (GB)"] = aggregate_metrics['memory_used'] / 1e9
+
+    print("\n".join(f"{key}: {value:.2f}" if isinstance(value, float) else f"{key}: {value}" for key, value in average_metrics.items()))
 
     if log_results:
         # Create parent directory if needed
         log_results.parents[0].mkdir(parents=True, exist_ok=True)
         # Save config and results to file
         with open(log_results, "w") as f:
-            json.dump(aggregate_metrics, f)
+            json.dump([average_metrics, aggregate_metrics], f, indent=4)
 
     if log_generations:
         # Create parent directory if needed
