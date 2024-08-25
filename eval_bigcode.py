@@ -1,3 +1,5 @@
+import json
+import jsonpickle
 import os
 import torch
 
@@ -17,6 +19,7 @@ if __name__ == '__main__':
     parser.add_argument('--no_stop_words', action='store_true', help='Do not stop words during generation')
     parser.add_argument('--num_samples', type=int, default=None, help='Number of samples.')
     parser.add_argument('--max_new_tokens', type=int, default=200, help='Maximum number of new tokens.')
+    parser.add_argument('--max_seq_len', type=int, default=-1, help='Maximum sequence length')
     parser.add_argument('--top_k', type=int, default=None, help='Top-k for sampling.')
     parser.add_argument('--top_p', type=float, default=1.0, help='Top-p for sampling.')
     parser.add_argument('--temperature', type=float, default=0.8, help='Temperature for sampling.')
@@ -33,9 +36,24 @@ if __name__ == '__main__':
     parser.add_argument('--device', type=str, default=default_device, help='Device to use')
     parser.add_argument('--log_results', type=Path, default=None, help='Path to log results')
     parser.add_argument('--log_generations', type=Path, default=None, help='Path to log generations')
-    parser.add_argument('--max_seq_len', type=int, default=-1, help='Maximum sequence length')
+    parser.add_argument('--log_dir', type=Path, help="Directory to log output")
 
     args = parser.parse_args()
+
+    # Prepare logging
+    log_results = None
+    log_generations = None
+    if args.log_dir:
+        args.log_dir.mkdir(parents=True, exist_ok=True)
+        with open(args.log_dir / "args.json", "w") as f:
+            f.write(jsonpickle.encode(args))
+
+        log_results = args.log_dir / f"performance.json"
+        log_generations = args.log_dir / f"generations.txt"
+    if args.log_results:
+        log_results = args.log_results
+    if args.log_generations:
+        log_generations = args.log_generations
 
     # Prepare data
     task = bigcode_eval.tasks.get_task(args.task)
@@ -50,7 +68,7 @@ if __name__ == '__main__':
     aggregate_metrics, generations = generate_samples(
         prompts, False, num_samples, args.max_new_tokens, args.top_k, args.top_p,
         args.temperature, args.checkpoint_path, args.compile, args.compile_prefill, args.profile, args.draft_checkpoint_path, args.draft_early_exit,
-        args.speculate_k, args.self_speculative, args.early_exit, args.device, args.log_results, args.log_generations, args.model_name, stop_words, args.max_seq_len
+        args.speculate_k, args.self_speculative, args.early_exit, args.device, log_results, log_generations, args.model_name, stop_words, args.max_seq_len
     )
 
     # Post process results
@@ -60,5 +78,10 @@ if __name__ == '__main__':
     # Evaluate results
     os.environ["HF_ALLOW_CODE_EVAL"] = "1"
     results = task.process_results(generations, references)
+
+    # Log results
+    if args.log_dir:
+        with open(args.log_dir / f"accuracy.json", "w") as f:
+            json.dump(results, f)
 
     print(results)
