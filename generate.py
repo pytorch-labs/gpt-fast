@@ -270,7 +270,7 @@ def generate(
 
     if T > max_seq_length:
         print(f"WARNING: size of prompt {prompt.size()} is greater than max_seq_length {max_seq_length}. Not generating tokens for this sample.")
-        return prompt, {'accept_counts': 0}
+        return prompt, {'accept_counts': accept_counts}
 
     # create an empty tensor of the expected final shape and fill in the current tokens
     empty = torch.empty(T_new + margin_seq_length, dtype=dtype, device=device)
@@ -499,6 +499,7 @@ def main(
 
 
     aggregate_metrics = {
+        'tokens_generated': [],
         'tokens_per_sec': [],
         'accept_counts': [],
         'time_for_inference': []
@@ -620,6 +621,7 @@ def main(
         else:
             print()
         tokens_sec = tokens_generated / t
+        aggregate_metrics['tokens_generated'].append(tokens_generated)
         aggregate_metrics['tokens_per_sec'].append(tokens_sec)
         aggregate_metrics['time_for_inference'].append(t)
         tokens_generated_filtered = len(y_dec) - prompt_length
@@ -628,6 +630,14 @@ def main(
         print(f"Bandwidth achieved: {model_size * tokens_sec / 1e9:.02f} GB/s")
     print("==========")
     print("max_seq_len_check: ", max_seq_len_check)
+
+    # Remove metrics for generations of length 0 so that they don't skew performance metrics
+    zero_indices = [idx for idx, tokens_generated in enumerate(aggregate_metrics['tokens_generated']) if tokens_generated==0]
+    for values in aggregate_metrics.values():
+        for zero_index in zero_indices:
+            del values[zero_index]
+
+    # Calculate Average of Metrics
     if is_speculative:
         print(aggregate_metrics)
         counts_aggregated = [sum(i) for i in zip(*aggregate_metrics['accept_counts'])]
