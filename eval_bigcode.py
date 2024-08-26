@@ -1,12 +1,12 @@
 import json
 import jsonpickle
 import os
+import sys
 import torch
 
 from generate import main as generate_samples
 from pathlib import Path
 
-import eval_bigcode
 import bigcode_eval.tasks
 
 default_device = 'cuda' if torch.cuda.is_available() else 'cpu'
@@ -47,6 +47,10 @@ if __name__ == '__main__':
         args.log_dir.mkdir(parents=True, exist_ok=True)
         with open(args.log_dir / "args.json", "w") as f:
             f.write(jsonpickle.encode(args))
+
+        arg_str = ' '.join([arg.replace("'", "'\\''") for arg in sys.argv[1:]])
+        with open(args.log_dir / "command_line.txt", "w") as f:
+            f.write(f"python {os.path.basename(__file__)} {arg_str}\n")
 
         log_results = args.log_dir / f"performance.json"
         log_generations = args.log_dir / f"generations.txt"
