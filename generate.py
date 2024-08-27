@@ -158,7 +158,7 @@ def generate(
     T_new = T + max_new_tokens
     T_buf = roundup(T_new, 128) # round up to multiple of 128 to use flex_attention
     if interactive:
-        max_seq_length = roundup(350, 128)
+        max_seq_length = 384
     else:
         max_seq_length = min(T_buf, model.config.block_size)
 

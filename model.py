@@ -19,40 +19,11 @@ def find_multiple(n: int, k: int) -> int:
     return n + k - (n % k)
 
 
-def causal_mask(b, h, q, kv):
-    return q >= kv
-
-
-class CausalMask:
-    def __init__(self, max_seq_length):
-        self.input_pos = None
-        self.max_seq_length = max_seq_length
-        self.block_masks = create_block_mask(causal_mask, 1, 1, max_seq_length, max_seq_length, device="cuda")
-
-    def decoding_causal_mask(self, b, h, q, kv):
-        offset = self.input_pos[0]
+def get_causal_mask(offset):
+    def causal_mask(b, h, q, kv):
         return offset + q >= kv
 
-    def get_mask(self, kv_len, input_pos) -> BlockMask:
-        self.input_pos = input_pos
-        offset = self.input_pos // self.block_masks.BLOCK_SIZE[0]
-        max_block_in_kv = (kv_len - 1) // self.block_masks.BLOCK_SIZE[1] + 1
-        new_kv_num_blocks = self.block_masks.kv_num_blocks[:, :, offset]
-        new_kv_indices = self.block_masks.kv_indices[:, :, offset, :max_block_in_kv]
-        new_full_kv_num_blocks = self.block_masks.full_kv_num_blocks[:, :, offset]
-        new_full_kv_indices = self.block_masks.full_kv_indices[:, :, offset, :max_block_in_kv]
-        layer_mask = BlockMask.from_kv_blocks(
-            new_kv_num_blocks,
-            new_kv_indices,
-            new_full_kv_num_blocks,
-            new_full_kv_indices,
-            BLOCK_SIZE=self.block_masks.BLOCK_SIZE,
-            mask_mod=self.decoding_causal_mask,
-        )
-        return layer_mask
-
-    def gen_prefill_mask(self, kv_len, q_len) -> BlockMask:
-        return create_block_mask(causal_mask, 1, 1, q_len, kv_len)
+    return causal_mask
 
 
 @dataclass
@@ -140,7 +111,6 @@ class Transformer(nn.Module):
         self.mask_cache: Optional[Tensor] = None
         self.max_batch_size = -1
         self.max_seq_length = -1
-        self.causal_mask = CausalMask(config.block_size)
 
     def setup_caches(self, max_batch_size, max_seq_length):
         if self.max_seq_length >= max_seq_length and self.max_batch_size >= max_batch_size:
@@ -159,6 +129,7 @@ class Transformer(nn.Module):
             b.attention.kv_cache = KVCache(max_batch_size, max_seq_length, self.config.n_local_heads, head_dim, dtype)
 
         self.freqs_cis = precompute_freqs_cis(self.config.block_size, self.config.dim // self.config.n_head, self.config.rope_base, dtype)
+        self.causal_mask = create_block_mask(get_causal_mask(0), 1, 1, max_seq_length, max_seq_length, device="cuda")
 
     def _forward(self, mask: BlockMask, idx: Tensor, input_pos: Optional[Tensor] = None) -> Tensor:
         assert self.freqs_cis is not None, "Caches must be initialized first"
@@ -172,11 +143,11 @@ class Transformer(nn.Module):
         return logits
 
     def forward(self, idx: Tensor, input_pos: Optional[Tensor] = None) -> Tensor:
-        mask = self.causal_mask.get_mask(self.max_seq_length, input_pos)
+        mask = self.causal_mask.get_mask(input_pos, get_causal_mask(input_pos[0]))
         return self._forward(mask, idx, input_pos)
 
     def prefill(self, idx: Tensor, input_pos: Optional[Tensor] = None) -> Tensor:
-        mask = self.causal_mask.gen_prefill_mask(self.max_seq_length, input_pos.shape[0])
+        mask = create_block_mask(get_causal_mask(0), 1, 1, input_pos.shape[0], self.max_seq_length, device="cuda")
         return self._forward(mask, idx, input_pos)
 
     @classmethod
