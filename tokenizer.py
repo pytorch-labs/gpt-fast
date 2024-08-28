@@ -105,7 +105,7 @@ def get_tokenizer(tokenizer_model_path, model_name):
     Returns:
     - TokenizerInterface: An instance of a tokenizer.
     """
-    if "Llama-3" in str(model_name):
+    if "Llama3" in str(model_name):
         return TiktokenWrapper(tokenizer_model_path)
     else:
         return SentencePieceWrapper(tokenizer_model_path)
