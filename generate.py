@@ -12,7 +12,7 @@ from typing import Optional, Tuple
 import torch
 import torch._dynamo.config
 import torch._inductor.config
-from torch.nn.attention.flex_attention import create_block_mask
+from torch.nn.attention.flex_attention import BlockMask, create_block_mask
 
 def device_sync(device):
     if "cuda" in device:
@@ -58,26 +58,29 @@ def sample(logits, temperature: float = 1.0, top_k: Optional[int] = None):
 def roundup(val, multiplier):
     return ((val - 1) // multiplier + 1) * multiplier
 
+def causal_mask(b, h, q, kv):
+    return q >= kv
+
 def prefill(model: Transformer, x: torch.Tensor, input_pos: torch.Tensor, **sampling_kwargs) -> torch.Tensor:
     # input_pos: [B, S]
-    mask = create_block_mask(model.get_mask_mod(0), 1, 1, input_pos.shape[0], model.max_seq_length, device="cuda")
+    mask = create_block_mask(causal_mask, 1, 1, input_pos.shape[0], model.max_seq_length, device="cuda")
     logits = model(mask, x, input_pos)
     return sample(logits, **sampling_kwargs)[0]
 
-def decode_one_token(model: Transformer, x: torch.Tensor, input_pos: torch.Tensor, **sampling_kwargs) -> Tuple[torch.Tensor, torch.Tensor]:
+def decode_one_token(model: Transformer, x: torch.Tensor, input_pos: torch.Tensor, block_mask: BlockMask, **sampling_kwargs) -> Tuple[torch.Tensor, torch.Tensor]:
     # input_pos: [B, 1]
     assert input_pos.shape[-1] == 1
-    block_index = input_pos // model.block_mask.BLOCK_SIZE[0]
-    mask = model.block_mask[:, :, block_index]
-    mask.mask_mod = model.get_mask_mod(input_pos[0])
+    block_index = input_pos // block_mask.BLOCK_SIZE[0]
+    mask = block_mask[:, :, block_index]
     logits = model(mask, x, input_pos)
     return sample(logits, **sampling_kwargs)
 
 def decode_n_tokens(model: Transformer, cur_token: torch.Tensor, input_pos: torch.Tensor, num_new_tokens: int, callback=lambda _: _, **sampling_kwargs):
+    block_mask = create_block_mask(causal_mask, 1, 1, model.max_seq_length, model.max_seq_length, device="cuda")
     new_tokens, new_probs = [], []
     for i in range(num_new_tokens):
         next_token, next_prob = decode_one_token(
-            model, cur_token, input_pos, **sampling_kwargs
+            model, cur_token, input_pos, block_mask, **sampling_kwargs
         )
         input_pos += 1
         new_tokens.append(next_token.clone())

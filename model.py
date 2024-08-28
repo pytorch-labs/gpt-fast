@@ -24,11 +24,11 @@ def find_multiple(n: int, k: int) -> int:
     return n + k - (n % k)
 
 
-def get_causal_mask(offset):
-    def causal_mask(b, h, q, kv):
-        return offset + q >= kv
+def get_mask_mod(mask_mod: _mask_mod_signature, offset: int):
+    def _mask_mod(b, h, q, kv):
+        return mask_mod(b, h, q + offset, kv)
 
-    return causal_mask
+    return _mask_mod
 
 
 @dataclass
@@ -103,7 +103,7 @@ class KVCache(nn.Module):
         return k_out, v_out
 
 class Transformer(nn.Module):
-    def __init__(self, config: ModelArgs, get_mask_mod: Callable[[int], _mask_mod_signature]) -> None:
+    def __init__(self, config: ModelArgs) -> None:
         super().__init__()
         self.config = config
 
@@ -135,10 +135,10 @@ class Transformer(nn.Module):
             b.attention.kv_cache = KVCache(max_batch_size, max_seq_length, self.config.n_local_heads, head_dim, dtype)
 
         self.freqs_cis = precompute_freqs_cis(self.config.block_size, self.config.dim // self.config.n_head, self.config.rope_base, dtype)
-        self.block_mask = create_block_mask(self.get_mask_mod(0), 1, 1, max_seq_length, max_seq_length, device="cuda")
 
     def forward(self, mask: BlockMask, idx: Tensor, input_pos: Optional[Tensor] = None) -> Tensor:
         assert self.freqs_cis is not None, "Caches must be initialized first"
+        mask.mask_mod = self.get_mask_mod(mask.mask_mod, input_pos[0])
         freqs_cis = self.freqs_cis[input_pos]
         x = self.tok_embeddings(idx)
 
@@ -150,7 +150,7 @@ class Transformer(nn.Module):
 
     @classmethod
     def from_name(cls, name: str):
-        return cls(ModelArgs.from_name(name), get_causal_mask)
+        return cls(ModelArgs.from_name(name))
 
 
 class TransformerBlock(nn.Module):
