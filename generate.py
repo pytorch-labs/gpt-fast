@@ -12,6 +12,7 @@ from typing import Optional, Tuple
 import torch
 import torch._dynamo.config
 import torch._inductor.config
+from torch.nn.attention.flex_attention import create_block_mask
 
 def device_sync(device):
     if "cuda" in device:
@@ -59,13 +60,17 @@ def roundup(val, multiplier):
 
 def prefill(model: Transformer, x: torch.Tensor, input_pos: torch.Tensor, **sampling_kwargs) -> torch.Tensor:
     # input_pos: [B, S]
-    logits = model.prefill(x, input_pos)
+    mask = create_block_mask(model.get_mask_mod(0), 1, 1, input_pos.shape[0], model.max_seq_length, device="cuda")
+    logits = model(mask, x, input_pos)
     return sample(logits, **sampling_kwargs)[0]
 
 def decode_one_token(model: Transformer, x: torch.Tensor, input_pos: torch.Tensor, **sampling_kwargs) -> Tuple[torch.Tensor, torch.Tensor]:
     # input_pos: [B, 1]
     assert input_pos.shape[-1] == 1
-    logits = model(x, input_pos)
+    block_index = input_pos // model.block_mask.BLOCK_SIZE[0]
+    mask = model.block_mask[block_index]
+    mask.mask_mod = model.get_mask_mod(input_pos[0])
+    logits = model(mask, x, input_pos)
     return sample(logits, **sampling_kwargs)
 
 def decode_n_tokens(model: Transformer, cur_token: torch.Tensor, input_pos: torch.Tensor, num_new_tokens: int, callback=lambda _: _, **sampling_kwargs):

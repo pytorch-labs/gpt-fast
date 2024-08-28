@@ -4,13 +4,18 @@
 # This source code is licensed under the license found in the
 # LICENSE file in the root directory of this source tree.
 from dataclasses import dataclass
-from typing import Optional
+from typing import Callable, Optional
 
 import torch
 import torch.nn as nn
 from torch import Tensor
 from torch.nn import functional as F
-from torch.nn.attention.flex_attention import BlockMask, create_block_mask, flex_attention
+from torch.nn.attention.flex_attention import (
+    _mask_mod_signature,
+    BlockMask,
+    create_block_mask,
+    flex_attention,
+)
 
 
 def find_multiple(n: int, k: int) -> int:
@@ -98,7 +103,7 @@ class KVCache(nn.Module):
         return k_out, v_out
 
 class Transformer(nn.Module):
-    def __init__(self, config: ModelArgs) -> None:
+    def __init__(self, config: ModelArgs, get_mask_mod: Callable[[int], _mask_mod_signature]) -> None:
         super().__init__()
         self.config = config
 
@@ -111,6 +116,7 @@ class Transformer(nn.Module):
         self.mask_cache: Optional[Tensor] = None
         self.max_batch_size = -1
         self.max_seq_length = -1
+        self.get_mask_mod = get_mask_mod
 
     def setup_caches(self, max_batch_size, max_seq_length):
         if self.max_seq_length >= max_seq_length and self.max_batch_size >= max_batch_size:
@@ -129,9 +135,9 @@ class Transformer(nn.Module):
             b.attention.kv_cache = KVCache(max_batch_size, max_seq_length, self.config.n_local_heads, head_dim, dtype)
 
         self.freqs_cis = precompute_freqs_cis(self.config.block_size, self.config.dim // self.config.n_head, self.config.rope_base, dtype)
-        self.causal_mask = create_block_mask(get_causal_mask(0), 1, 1, max_seq_length, max_seq_length, device="cuda")
+        self.block_mask = create_block_mask(self.get_mask_mod(0), 1, 1, max_seq_length, max_seq_length, device="cuda")
 
-    def _forward(self, mask: BlockMask, idx: Tensor, input_pos: Optional[Tensor] = None) -> Tensor:
+    def forward(self, mask: BlockMask, idx: Tensor, input_pos: Optional[Tensor] = None) -> Tensor:
         assert self.freqs_cis is not None, "Caches must be initialized first"
         freqs_cis = self.freqs_cis[input_pos]
         x = self.tok_embeddings(idx)
@@ -142,17 +148,9 @@ class Transformer(nn.Module):
         logits = self.output(x)
         return logits
 
-    def forward(self, idx: Tensor, input_pos: Optional[Tensor] = None) -> Tensor:
-        mask = self.causal_mask.get_mask(input_pos, get_causal_mask(input_pos[0]))
-        return self._forward(mask, idx, input_pos)
-
-    def prefill(self, idx: Tensor, input_pos: Optional[Tensor] = None) -> Tensor:
-        mask = create_block_mask(get_causal_mask(0), 1, 1, input_pos.shape[0], self.max_seq_length, device="cuda")
-        return self._forward(mask, idx, input_pos)
-
     @classmethod
     def from_name(cls, name: str):
-        return cls(ModelArgs.from_name(name))
+        return cls(ModelArgs.from_name(name), get_causal_mask)
 
 
 class TransformerBlock(nn.Module):
