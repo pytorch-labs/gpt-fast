@@ -68,7 +68,7 @@ def decode_one_token(model: Transformer, x: torch.Tensor, input_pos: torch.Tenso
     # input_pos: [B, 1]
     assert input_pos.shape[-1] == 1
     block_index = input_pos // model.block_mask.BLOCK_SIZE[0]
-    mask = model.block_mask[block_index]
+    mask = model.block_mask[:, :, block_index]
     mask.mask_mod = model.get_mask_mod(input_pos[0])
     logits = model(mask, x, input_pos)
     return sample(logits, **sampling_kwargs)
