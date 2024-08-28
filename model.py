@@ -4,7 +4,7 @@
 # This source code is licensed under the license found in the
 # LICENSE file in the root directory of this source tree.
 from dataclasses import dataclass
-from typing import Callable, Optional
+from typing import Optional
 
 import torch
 import torch.nn as nn
@@ -13,7 +13,6 @@ from torch.nn import functional as F
 from torch.nn.attention.flex_attention import (
     _mask_mod_signature,
     BlockMask,
-    create_block_mask,
     flex_attention,
 )
 
