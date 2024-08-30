@@ -165,7 +165,7 @@ def eval(
     Args:
         model (Transformer): The pre-trained language model to evaluate.
         tokenizer: The tokenizer to use for encoding/decoding text.
-        task (str): The name of the evaluation task to perform.
+        tasks (list): The names of the evaluation tasks to perform.
         limit (Optional[int]): The maximum number of samples to evaluate (None for all available).
         max_seq_length (Optional[int]): The maximum sequence length allowed for input text.
 
@@ -208,7 +208,7 @@ def main(
     Args:
         checkpoint_path (Path): The path to the model checkpoint file to load.
         compile (bool): Whether or not to compile the model for optimization.
-        task (Optional[str]): The name of the evaluation task or a list of tasks to perform.
+        tasks (list): The names of the evaluation tasks to perform.
         limit (Optional[int]): The maximum number of samples to evaluate (None for all available).
         max_seq_length (Optional[int]): The maximum sequence length allowed for input text.
 
