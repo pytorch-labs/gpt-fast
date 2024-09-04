@@ -74,6 +74,7 @@ def decode_one_token(model: Transformer, x: torch.Tensor, input_pos: torch.Tenso
     assert input_pos.shape[-1] == 1
     block_index = input_pos // block_mask.BLOCK_SIZE[0]
     mask = block_mask[:, :, block_index]
+    mask.mask_mod = block_mask.mask_mod
     logits = model(mask, x, input_pos)
     return sample(logits, **sampling_kwargs)
 
@@ -167,11 +168,10 @@ def generate(
     # create an empty tensor of the expected final shape and fill in the current tokens
     T = prompt.size(-1)
     T_new = T + max_new_tokens
-    T_buf = roundup(T_new, 128) # round up to multiple of 128 to use flex_attention
     if interactive:
-        max_seq_length = 384
+        max_seq_length = 350
     else:
-        max_seq_length = min(T_buf, model.config.block_size)
+        max_seq_length = min(T_new, model.config.block_size)
 
     device, dtype = prompt.device, prompt.dtype
     max_seq_length = max_seq_length + speculate_k + 1 if is_speculative else max_seq_length
@@ -181,7 +181,7 @@ def generate(
             draft_model.setup_caches(max_batch_size=batch_size, max_seq_length=max_seq_length)
 
     # create an empty tensor of the expected final shape and fill in the current tokens
-    empty = torch.empty(batch_size, T_buf, dtype=dtype, device=device)
+    empty = torch.empty(batch_size, T_new, dtype=dtype, device=device)
     # We are just making the same prompt for every batch
     prompt = prompt.view(1, -1).repeat(batch_size, 1)
     empty[:, :T] = prompt
@@ -214,12 +214,12 @@ def generate(
             next_token = next_tokens[-1]
     else:
         generated_tokens, _ = decode_n_tokens(model, next_token.view(batch_size, -1), input_pos, max_new_tokens - 1, callback=callback, **sampling_kwargs)
-        seq[:, T + 1:T_new] = torch.cat(generated_tokens, dim=-1)
+        seq[:, T + 1:] = torch.cat(generated_tokens, dim=-1)
 
     generate_stats = {
         'accept_counts': accept_counts
     }
-    return seq[:T_new], generate_stats
+    return seq, generate_stats
 
 def encode_tokens(tokenizer, string, bos=True, device=default_device):
     tokens = tokenizer.encode(string)
