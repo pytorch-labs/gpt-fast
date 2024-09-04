@@ -73,6 +73,7 @@ mistralai/Mistral-7B-v0.1
 mistralai/Mistral-7B-Instruct-v0.1
 mistralai/Mistral-7B-Instruct-v0.2
 meta-llama/Meta-Llama-3-8B
+meta-llama/Meta-Llama-3.1-405B
 ```
 
 For example, to convert Llama-2-7b-chat-hf
@@ -120,6 +121,7 @@ Benchmarks run on an 8xA100-80GB, power limited to 330W with a hybrid cube mesh 
 | Llama-2-70B | Base    | 62.50     | 1135.29 |
 |           | 8-bit   | 80.44    | 752.04 |
 |           | 4-bit (G=32)   | 90.77    | 548.10 |
+| Llama-3.1-405B | 8-bit | 15.60 | 815.87 |
 
 ### AMD
 Benchmarks run on one GCD of a MI-250x.
