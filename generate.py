@@ -423,7 +423,7 @@ def main(
 ) -> None:
     """Generates text samples based on a pre-trained Transformer model and tokenizer.
     """
-    if not isinstance(prompts, Iterable):
+    if not isinstance(prompts, List):
         prompts = [prompts]
 
     assert checkpoint_path.is_file(), checkpoint_path
