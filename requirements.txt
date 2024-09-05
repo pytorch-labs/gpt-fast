@@ -4,3 +4,4 @@ tiktoken
 huggingface_hub
 torchao
 jsonpickle
+blobfile==3.0.0
