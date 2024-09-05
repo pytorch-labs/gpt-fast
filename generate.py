@@ -92,10 +92,10 @@ def decode_one_token_early(model: Transformer, x: torch.Tensor, input_pos: torch
     logits = model.forward_early(x, input_pos)
     return sample(logits, **sampling_kwargs)
 
-def decode_n_tokens(model: Transformer, cur_token: torch.Tensor, input_pos: torch.Tensor, num_new_tokens: int, callback=lambda _: False, **sampling_kwargs):
+def decode_n_tokens(model: Transformer, cur_token: torch.Tensor, input_pos: torch.Tensor, num_new_tokens: int, callback=lambda _: False, enable_flash: bool = False, enable_mem_efficient: bool = False, **sampling_kwargs):
     new_tokens, new_probs = [], []
     for i in range(num_new_tokens):
-        with torch.backends.cuda.sdp_kernel(enable_flash=False, enable_mem_efficient=False, enable_math=True): # Actually better for Inductor to codegen attention here
+        with torch.backends.cuda.sdp_kernel(enable_flash=enable_flash, enable_mem_efficient=enable_mem_efficient, enable_math=True): # Actually better for Inductor to codegen attention here
             if model.early_num_layers < model.num_layers:
                 next_token, next_prob = decode_one_token_early(
                     model, cur_token, input_pos, **sampling_kwargs
@@ -128,12 +128,14 @@ def self_speculative_decode(
     cur_token: torch.Tensor,
     input_pos: int,
     speculate_k: int,
+    enable_flash: bool = False,
+    enable_mem_efficient: bool = False,
     **sampling_kwargs
 ) -> torch.Tensor:
     # draft model inference sequentially
     device = cur_token.device
     orig_input_pos = torch.tensor([input_pos], dtype=torch.int64, device=cur_token.device)
-    draft_tokens, draft_probs = decode_n_tokens(model, cur_token.view(1, -1), orig_input_pos.clone(), speculate_k, **sampling_kwargs)
+    draft_tokens, draft_probs = decode_n_tokens(model, cur_token.view(1, -1), orig_input_pos.clone(), speculate_k, enable_flash=enable_flash, enable_mem_efficient=enable_mem_efficient, **sampling_kwargs)
 
     draft_tokens = torch.cat(draft_tokens)
     # parallel inference on target model using draft tokens
@@ -178,12 +180,14 @@ def speculative_decode(
     cur_token: torch.Tensor,
     input_pos: int,
     speculate_k: int,
+    enable_flash: bool = False,
+    enable_mem_efficient: bool = False,
     **sampling_kwargs
 ) -> torch.Tensor:
     # draft model inference sequentially
     device = cur_token.device
     orig_input_pos = torch.tensor([input_pos], dtype=torch.int64, device=cur_token.device)
-    draft_tokens, draft_probs = decode_n_tokens(draft_model, cur_token.view(1, -1), orig_input_pos.clone(), speculate_k, **sampling_kwargs)
+    draft_tokens, draft_probs = decode_n_tokens(draft_model, cur_token.view(1, -1), orig_input_pos.clone(), speculate_k, enable_flash=enable_flash, enable_mem_efficient=enable_mem_efficient, **sampling_kwargs)
 
     draft_tokens = torch.cat(draft_tokens)
     # parallel inference on target model using draft tokens
@@ -235,6 +239,8 @@ def generate(
     callback = lambda x: False,
     max_seq_len: Optional[int] = -1,
     margin_seq_length: Optional[int] = 10,
+    enable_flash: bool = False,
+    enable_mem_efficient: bool = False,
     **sampling_kwargs
 ) -> torch.Tensor:
     """
@@ -293,7 +299,7 @@ def generate(
 
             if is_self_speculative:
                 next_tokens = self_speculative_decode(
-                    model, cur_token, input_pos, num_next_tokens, **sampling_kwargs
+                    model, cur_token, input_pos, num_next_tokens, enable_flash=enable_flash, enable_mem_efficient=enable_mem_efficient, **sampling_kwargs
                 )
             else:
                 next_tokens = speculative_decode(
@@ -311,7 +317,7 @@ def generate(
                 break
         seq = seq[:input_pos]
     else:
-        generated_tokens, _ = decode_n_tokens(model, next_token.view(1, -1), input_pos, T_new - T - 1, callback=callback, **sampling_kwargs)
+        generated_tokens, _ = decode_n_tokens(model, next_token.view(1, -1), input_pos, T_new - T - 1, callback=callback, enable_flash=enable_flash, enable_mem_efficient=enable_mem_efficient, **sampling_kwargs)
         seq[T + 1: T + 1 + len(generated_tokens)] = torch.cat(generated_tokens)
         seq = seq[:T + 1 + len(generated_tokens)]
 
@@ -400,6 +406,8 @@ def main(
     checkpoint_path: Path = Path("checkpoints/meta-Transformer/Transformer-2-7b-chat-hf/model.pth"),
     compile: bool = True,
     compile_prefill: bool = False,
+    enable_flash: bool = False,
+    enable_mem_efficient: bool = False,
     profile: Optional[Path] = None,
     draft_checkpoint_path: Optional[Path] = None,
     draft_early_exit: Optional[int] = None,
@@ -595,6 +603,8 @@ def main(
                 is_self_speculative=self_speculative,
                 top_k=top_k,
                 top_p=top_p,
+                enable_flash=enable_flash,
+                enable_mem_efficient=enable_mem_efficient,
             )
             aggregate_metrics['accept_counts'].append(metrics['accept_counts'])
         if i == -1:
@@ -688,6 +698,8 @@ if __name__ == '__main__':
     parser.add_argument('--model_name', type=str, default=None, help='Model name to help find the architecture of the model.')
     parser.add_argument('--compile', action='store_true', help='Whether to compile the model.')
     parser.add_argument('--compile_prefill', action='store_true', help='Whether to compile the prefill (improves prefill perf, but higher compile times)')
+    parser.add_argument('--enable_flash', action='store_true', help='Whether to enable flash attention')
+    parser.add_argument('--enable_mem_efficient', action='store_true', help='Whether to enable memory efficient attention')
     parser.add_argument('--profile', type=Path, default=None, help='Profile path.')
     parser.add_argument('--speculate_k', type=int, default=5, help='Speculative execution depth.')
     parser.add_argument('--draft_checkpoint_path', type=Path, default=None, help='Draft checkpoint path.')
@@ -702,6 +714,7 @@ if __name__ == '__main__':
     args = parser.parse_args()
     main(
         args.prompt, args.interactive, args.num_samples, args.max_new_tokens, args.top_k, args.top_p,
-        args.temperature, args.checkpoint_path, args.compile, args.compile_prefill, args.profile, args.draft_checkpoint_path, args.draft_early_exit,
+        args.temperature, args.checkpoint_path, args.compile, args.compile_prefill, args.enable_flash, args.enable_mem_efficient,
+        args.profile, args.draft_checkpoint_path, args.draft_early_exit,
         args.speculate_k, args.self_speculative, args.early_exit, args.device, args.log_results, args.log_generations, args.model_name, args.stop_words,
     )

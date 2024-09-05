@@ -25,6 +25,8 @@ if __name__ == '__main__':
     parser.add_argument('--model_name', type=str, default=None, help='Model name to help find the architecture of the model.')
     parser.add_argument('--compile', action='store_true', help='Whether to compile the model.')
     parser.add_argument('--compile_prefill', action='store_true', help='Whether to compile the prefill (improves prefill perf, but higher compile times)')
+    parser.add_argument('--enable_flash', action='store_true', help='Whether to enable flash attention')
+    parser.add_argument('--enable_mem_efficient', action='store_true', help='Whether to enable memory efficient attention')
     parser.add_argument('--profile', type=Path, default=None, help='Profile path.')
     parser.add_argument('--speculate_k', type=int, default=5, help='Speculative execution depth.')
     parser.add_argument('--draft_checkpoint_path', type=Path, default=None, help='Draft checkpoint path.')
@@ -44,6 +46,7 @@ if __name__ == '__main__':
     stop_words = get_stop_words(args.dataset)
     main(
         prompts, args.interactive, num_samples, args.max_new_tokens, args.top_k, args.top_p,
-        args.temperature, args.checkpoint_path, args.compile, args.compile_prefill, args.profile, args.draft_checkpoint_path, args.draft_early_exit,
+        args.temperature, args.checkpoint_path, args.compile, args.compile_prefill, args.enable_flash, args.enable_mem_efficient,
+        args.profile, args.draft_checkpoint_path, args.draft_early_exit,
         args.speculate_k, args.self_speculative, args.early_exit, args.device, args.log_results, args.log_generations, args.model_name, stop_words, args.max_seq_len
     )

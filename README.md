@@ -50,10 +50,11 @@ Projects inspired by gpt-fast in the community:
 - [gpt-accelera](https://github.com/Edward-Sun/gpt-accelera): extends `gpt-fast` to SFT/RM/PPO training and batched inference to optimize the throughput
 
 ## Installation
-[Download PyTorch nightly](https://pytorch.org/get-started/locally/)
-Install sentencepiece and huggingface_hub
-```bash
-pip install sentencepiece huggingface_hub
+```
+conda create --name atom python=3.10
+conda activate atom
+pip install git+https://github.com/bigcode-project/bigcode-evaluation-harness.git@0f3e95f0806e78a4f432056cdb1be93604a51d69
+pip install -r requirements.txt
 ```
 
 To download llama models, go to https://huggingface.co/meta-llama/Llama-2-7b and go through steps to obtain access.
