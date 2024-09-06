@@ -116,9 +116,11 @@ Benchmarks run on an 8xA100-80GB, power limited to 330W with a hybrid cube mesh 
 |           | 8   | 62.50   | 1135.29 |
 | Llama-3.1-8B  | 1    |  93.83  | 1408.37 |
 |           | 2   | 149.10   | 1197.32 |
+|           | 4   | 217.21   | 986.32  |
 |           | 8   | 276.01   | 772.60 |
 | Llama-3.1-70B  | 1    |  OOM  |  |
 |           | 2   | 16.03   | 1130.81 |
+|           | 4   | 37.45   | 1360.53 |
 |           | 8   | 58.78   | 1129.61 |
 
 ### Tensor Parallelism + Quantization
