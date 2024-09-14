@@ -332,12 +332,12 @@ def encode_tokens(tokenizer, string, bos=True, device=default_device):
         tokens = [tokenizer.bos_id()] + tokens
     return torch.tensor(tokens, dtype=torch.int, device=device)
 
-def _load_model(checkpoint_path, device, precision, use_tp, early_exit: int = -1, model_name: str = None):
+def _load_model(checkpoint_path, device, precision, use_tp, model_name: str = None, **kwargs):
     use_cuda = 'cuda' in device
     with torch.device('meta'):
         if model_name is None:
             model_name = checkpoint_path.parent.name
-        model = Transformer.from_name(model_name, early_exit=early_exit)
+        model = Transformer.from_name(model_name, **kwargs)
 
     if "int8" in str(checkpoint_path):
         print("Using int8 weight-only quantization!")
@@ -406,6 +406,7 @@ def main(
     checkpoint_path: Path = Path("checkpoints/meta-Transformer/Transformer-2-7b-chat-hf/model.pth"),
     compile: bool = True,
     compile_prefill: bool = False,
+    sdpa: Optional[str] = None,
     enable_flash: bool = False,
     enable_mem_efficient: bool = False,
     profile: Optional[Path] = None,
@@ -447,10 +448,10 @@ def main(
 
     print("Loading model ...")
     t0 = time.time()
-    model = _load_model(checkpoint_path, device, precision, use_tp, early_exit=early_exit if self_speculative else -1, model_name=model_name)
+    model = _load_model(checkpoint_path, device, precision, use_tp, model_name=model_name, early_exit=early_exit if self_speculative else -1, sdpa=sdpa)
 
     if is_speculative:
-        draft_model = _load_model(draft_checkpoint_path, device, precision, use_tp)
+        draft_model = _load_model(draft_checkpoint_path, device, precision, use_tp, sdpa=sdpa)
         if draft_early_exit is not None and draft_early_exit > -1:
             draft_model.layers = draft_model.layers[0:draft_early_exit]
             draft_model.num_layers = draft_early_exit
@@ -700,6 +701,7 @@ if __name__ == '__main__':
     parser.add_argument('--model_name', type=str, default=None, help='Model name to help find the architecture of the model.')
     parser.add_argument('--compile', action='store_true', help='Whether to compile the model.')
     parser.add_argument('--compile_prefill', action='store_true', help='Whether to compile the prefill (improves prefill perf, but higher compile times)')
+    parser.add_argument('--sdpa', type=str, help='Implementation type for scaled dot product attention')
     parser.add_argument('--enable_flash', action='store_true', help='Whether to enable flash attention')
     parser.add_argument('--enable_mem_efficient', action='store_true', help='Whether to enable memory efficient attention')
     parser.add_argument('--profile', type=Path, default=None, help='Profile path.')
@@ -716,7 +718,7 @@ if __name__ == '__main__':
     args = parser.parse_args()
     main(
         args.prompt, args.interactive, args.num_samples, args.max_new_tokens, args.top_k, args.top_p,
-        args.temperature, args.checkpoint_path, args.compile, args.compile_prefill, args.enable_flash, args.enable_mem_efficient,
+        args.temperature, args.checkpoint_path, args.compile, args.compile_prefill, args.sdpa, args.enable_flash, args.enable_mem_efficient,
         args.profile, args.draft_checkpoint_path, args.draft_early_exit,
         args.speculate_k, args.self_speculative, args.early_exit, args.device, args.log_results, args.log_generations, args.model_name, args.stop_words, args.max_seq_len,
     )
