@@ -60,7 +60,7 @@ class ModelArgs:
     sdpa: str = None
 
     prune_layer: int = 15
-    chai_activate: bool = True
+    chai_activate: bool = False
     chai_layers: list = field(
         default_factory=lambda: [
             28,

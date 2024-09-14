@@ -394,10 +394,10 @@ def main(
 
     print("Loading model ...")
     t0 = time.time()
-    model = _load_model(checkpoint_path, device, precision, use_tp, early_exit=early_exit if self_speculative else -1, sdpa=sdpa)
+    model = _load_model(checkpoint_path, device, precision, use_tp, early_exit=early_exit if self_speculative else -1, sdpa=sdpa, chai_activate=chai_activate)
 
     if is_speculative:
-        draft_model = _load_model(draft_checkpoint_path, device, precision, use_tp, sdpa=sdpa)
+        draft_model = _load_model(draft_checkpoint_path, device, precision, use_tp, sdpa=sdpa, chai_activate=chai_activate)
         if draft_early_exit is not None and draft_early_exit > -1:
             draft_model.layers = draft_model.layers[0:draft_early_exit]
             draft_model.num_layers = draft_early_exit
