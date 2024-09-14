@@ -692,6 +692,7 @@ if __name__ == '__main__':
     parser.add_argument('--interactive', action='store_true', help='Whether to launch in interactive mode')
     parser.add_argument('--num_samples', type=int, default=5, help='Number of samples.')
     parser.add_argument('--max_new_tokens', type=int, default=200, help='Maximum number of new tokens.')
+    parser.add_argument('--max_seq_len', type=int, default=-1, help='Maximum sequence length')
     parser.add_argument('--top_k', type=int, default=None, help='Top-k for sampling.')
     parser.add_argument('--top_p', type=float, default=1.0, help='Top-p for sampling.')
     parser.add_argument('--temperature', type=float, default=0.8, help='Temperature for sampling.')
@@ -717,5 +718,5 @@ if __name__ == '__main__':
         args.prompt, args.interactive, args.num_samples, args.max_new_tokens, args.top_k, args.top_p,
         args.temperature, args.checkpoint_path, args.compile, args.compile_prefill, args.enable_flash, args.enable_mem_efficient,
         args.profile, args.draft_checkpoint_path, args.draft_early_exit,
-        args.speculate_k, args.self_speculative, args.early_exit, args.device, args.log_results, args.log_generations, args.model_name, args.stop_words,
+        args.speculate_k, args.self_speculative, args.early_exit, args.device, args.log_results, args.log_generations, args.model_name, args.stop_words, args.max_seq_len,
     )
