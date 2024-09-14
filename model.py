@@ -3,7 +3,7 @@
 
 # This source code is licensed under the license found in the
 # LICENSE file in the root directory of this source tree.
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from typing import Optional
 
 import torch
@@ -22,6 +22,28 @@ def find_multiple(n: int, k: int) -> int:
         return n
     return n + k - (n % k)
 
+# Inefficient SDPA
+def naive_scaled_dot_product_attention(query, key, value, attn_mask=None, dropout_p=0.0, is_causal=False, scale=None) -> torch.Tensor:
+    L, S = query.size(-2), key.size(-2)
+    scale_factor = 1 / math.sqrt(query.size(-1)) if scale is None else scale
+    attn_bias = torch.zeros(1, 1, L, S, dtype=query.dtype, device=query.device)
+    if is_causal:
+        assert attn_mask is None
+        temp_mask = torch.ones(L, S, dtype=torch.bool, device=query.device).tril(diagonal=0)
+        attn_bias.masked_fill_(temp_mask.logical_not(), float("-inf"))
+        attn_bias.to(query.dtype)
+
+    if attn_mask is not None:
+        if attn_mask.dtype == torch.bool:
+            attn_bias.masked_fill_(attn_mask.logical_not(), float("-inf"))
+        else:
+            attn_bias += attn_mask
+    attn_weight = query @ key.transpose(-2, -1) * scale_factor
+    attn_weight += attn_bias
+    attn_weight = torch.softmax(attn_weight, dim=-1)
+    attn_weight = torch.dropout(attn_weight, dropout_p, train=True)
+    return attn_weight @ value
+
 @dataclass
 class ModelArgs:
     block_size: int = 2048
@@ -34,6 +56,8 @@ class ModelArgs:
     head_dim: int = 64
     rope_base: float = 10000
     norm_eps: float = 1e-5
+
+    sdpa: str = None
 
     prune_layer: int = 15
     chai_activate: bool = True
@@ -263,8 +287,10 @@ class Transformer(nn.Module):
         return logits
 
     @classmethod
-    def from_name(cls, name: str, early_exit: int = -1):
-        return cls(ModelArgs.from_name(name), early_exit=early_exit)
+    def from_name(cls, name: str, early_exit: int = -1, **kwargs):
+        model_args = ModelArgs.from_name(name)
+        model_args = replace(model_args, **kwargs)
+        return cls(model_args, early_exit=early_exit)
 
 
 class TransformerBlock(nn.Module):
@@ -306,6 +332,8 @@ class Attention(nn.Module):
         self.n_local_heads = config.n_local_heads
         self.dim = config.dim
         self._register_load_state_dict_pre_hook(self.load_hook)
+
+        self.sdpa = config.sdpa
 
         self.layer_id = layer_id
         self.chai_activate = config.chai_activate
@@ -461,7 +489,10 @@ class Attention(nn.Module):
         else:
             k = k.repeat_interleave(self.n_head // self.n_local_heads, dim=1)
             v = v.repeat_interleave(self.n_head // self.n_local_heads, dim=1)
-            y = F.scaled_dot_product_attention(q, k, v, attn_mask=mask, dropout_p=0.0)
+            if self.sdpa == "naive":
+                y = naive_scaled_dot_product_attention(q, k, v, attn_mask=mask, dropout_p=0.0)
+            else:
+                y = F.scaled_dot_product_attention(q, k, v, attn_mask=mask, dropout_p=0.0)
 
             y = y.transpose(1, 2).contiguous().view(bsz, seqlen, self.dim)
 

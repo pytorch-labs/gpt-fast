@@ -25,6 +25,7 @@ if __name__ == '__main__':
     parser.add_argument('--compile', action='store_true', help='Whether to compile the model.')
     parser.add_argument('--compile_prefill', action='store_true', help='Whether to compile the prefill (improves prefill perf, but higher compile times)')
     parser.add_argument('--profile', type=Path, default=None, help='Profile path.')
+    parser.add_argument('--sdpa', type=str, help='Implementation type for scaled dot product attention')
     parser.add_argument('--speculate_k', type=int, default=5, help='Speculative execution depth.')
     parser.add_argument('--draft_checkpoint_path', type=Path, default=None, help='Draft checkpoint path.')
     parser.add_argument('--draft_early_exit', type=int, default=None, help='Early exit layer of draft model.')
@@ -39,6 +40,6 @@ if __name__ == '__main__':
     prompts = [example.input for example in evaluation_set]
     main(
         prompts, args.interactive, args.num_samples, args.max_new_tokens, args.top_k, args.top_p,
-        args.temperature, args.checkpoint_path, args.compile, args.compile_prefill, args.profile, args.draft_checkpoint_path, args.draft_early_exit,
+        args.temperature, args.checkpoint_path, args.compile, args.compile_prefill, args.profile, args.sdpa, args.draft_checkpoint_path, args.draft_early_exit,
         args.speculate_k, args.self_speculative, args.early_exit, args.device, args.log_file
     )
