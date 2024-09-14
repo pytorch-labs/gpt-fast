@@ -76,16 +76,17 @@ if __name__ == '__main__':
                     )
                 )
 
-            aggregate_metrics = json.load(log_results.open())
+            performance_metrics = json.load(log_results.open())
+            average_metrics = performance_metrics["average_metrics"]
             log_results.unlink()
 
             if is_speculative:
-                counts_aggregated = [sum(i) for i in zip(*aggregate_metrics['accept_counts'])]
-                acceptance_probs = [i/sum(counts_aggregated) for i in counts_aggregated]
-                mean_accepted = {sum([idx * i for idx, i in enumerate(counts_aggregated)])/sum(counts_aggregated)}
+                counts_aggregated = average_metrics['Counts Aggregated']
+                acceptance_probs = average_metrics['Acceptance probs']
+                mean_accepted = average_metrics['Mean Accepted']
 
-            average_tokens_per_second = torch.mean(torch.tensor(aggregate_metrics['tokens_per_sec'][args.sample_warmup:])).item()
-            memory_used = aggregate_metrics["memory_used"] / 1e9
+            average_tokens_per_second = average_metrics['Average tokens/sec']
+            memory_used = average_metrics['Memory used (GB)']
 
             results.append({
                 "speculate_k": speculate_k,

@@ -656,6 +656,7 @@ def main(
         print(aggregate_metrics)
         counts_aggregated = [sum(i) for i in zip(*aggregate_metrics['accept_counts'])]
         acceptance_probs = [i/sum(counts_aggregated) for i in counts_aggregated]
+        average_metrics["Counts Aggregated"] = counts_aggregated
         average_metrics["Acceptance probs"] = acceptance_probs
         average_metrics["Mean Accepted"] = sum([idx * i for idx, i in enumerate(counts_aggregated)])/sum(counts_aggregated)
 
@@ -671,7 +672,7 @@ def main(
         log_results.parents[0].mkdir(parents=True, exist_ok=True)
         # Save config and results to file
         with open(log_results, "w") as f:
-            json.dump([average_metrics, aggregate_metrics], f, indent=4)
+            json.dump({"average_metrics": average_metrics, "aggregate_metrics": aggregate_metrics}, f, indent=4)
 
     if log_generations:
         # Create parent directory if needed
