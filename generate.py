@@ -471,7 +471,7 @@ def main(
             stop_word_ids = stop_words_ids[i]
             # Remove control sequences from stop_ids that are not detected if stop_word exists in the middle of a sequence
             for id in stop_word_ids:
-                if tokenizer.encode(tokenizer.decode(id)) == []:
+                if tokenizer.encode(tokenizer.decode([id])) == []:
                     stop_word_ids.remove(id)
             stop_words_ids[i] = stop_word_ids
         # stop_words_ids.append([tokenizer.eos_id()])
