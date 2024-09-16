@@ -35,6 +35,7 @@ if __name__ == '__main__':
     parser.add_argument('--draft_early_exit', type=int, default=None, help='Early exit layer of draft model.')
     parser.add_argument('--self_speculative', action='store_true', help='Whether to use self speculative decoding')
     parser.add_argument('--early_exit', type=int, default=-1, help='The layer to exit early')
+    parser.add_argument('--chai_activate', action='store_true', help='Enable clustered head attention inference')
     parser.add_argument('--device', type=str, default=default_device, help='Device to use')
     parser.add_argument('--log_results', type=Path, default=None, help='Path to log results')
     parser.add_argument('--log_generations', type=Path, default=None, help='Path to log generations')
@@ -50,5 +51,5 @@ if __name__ == '__main__':
         prompts, args.interactive, num_samples, args.max_new_tokens, args.top_k, args.top_p,
         args.temperature, args.checkpoint_path, args.compile, args.compile_prefill, args.sdpa, args.enable_flash, args.enable_mem_efficient,
         args.profile, args.draft_checkpoint_path, args.draft_early_exit,
-        args.speculate_k, args.self_speculative, args.early_exit, args.device, args.log_results, args.log_generations, args.model_name, stop_words, args.max_seq_len
+        args.speculate_k, args.self_speculative, args.early_exit, args.chai_activate, args.device, args.log_results, args.log_generations, args.model_name, stop_words, args.max_seq_len
     )
