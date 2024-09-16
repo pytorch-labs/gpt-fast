@@ -5,6 +5,7 @@
 # LICENSE file in the root directory of this source tree.
 from dataclasses import dataclass, field, replace
 from typing import Optional
+import math
 
 import torch
 import torch.nn as nn
@@ -46,7 +47,7 @@ def naive_scaled_dot_product_attention(query, key, value, attn_mask=None, dropou
 
 @dataclass
 class ModelArgs:
-    block_size: int = 2048
+    block_size: int = 4096
     vocab_size: int = 32000
     n_layer: int = 32
     n_head: int = 32
@@ -131,16 +132,19 @@ class ModelArgs:
 
 
 transformer_configs = {
-    "CodeLlama-7b-Python-hf": dict(block_size=16384, vocab_size=32000, n_layer=32, dim = 4096, rope_base=1000000),
-    "7B": dict(n_layer=32, n_head=32, dim=4096),
-    "13B": dict(n_layer=40, n_head=40, dim=5120),
-    "30B": dict(n_layer=60, n_head=52, dim=6656),
-    "34B": dict(n_layer=48, n_head=64, dim=8192, vocab_size=32000, n_local_heads=8, intermediate_size=22016, rope_base=1000000), # CodeLlama-34B-Python-hf
-    "70B": dict(n_layer=80, n_head=64, dim=8192, n_local_heads=8, intermediate_size=28672),
+    "Llama1-7B": dict(block_size=2048, n_layer=32, n_head=32, dim=4096),
+    "Llama2-7B": dict(block_size=4096, n_layer=32, n_head=32, dim=4096),
+    "Llama2-13B": dict(block_size=4096, n_layer=40, n_head=40, dim=5120),
+    "Llama2-30B": dict(block_size=4096, n_layer=60, n_head=52, dim=6656),
+    "Llama2-34B": dict(block_size=4096, n_layer=48, n_head=64, dim=8192, vocab_size=32000, n_local_heads=8, intermediate_size=22016, rope_base=10000),
+    "Llama2-70B": dict(block_size=4096, n_layer=80, n_head=64, dim=8192, n_local_heads=8, intermediate_size=28672),
+    "CodeLlama-7B": dict(block_size=16384, n_layer=32, n_head=32, dim=4096, vocab_size=32016, intermediate_size=11008, rope_base=1000000),
+    "CodeLlama-34B": dict(block_size=16384, n_layer=48, n_head=64, dim=8192, vocab_size=32000, n_local_heads=8, intermediate_size=22016, rope_base=1000000), # CodeLlama-34B-Python-hf
+    "CodeLlama-7B-Python": dict(block_size=16384, vocab_size=32000, n_layer=32, dim = 4096, rope_base=1000000),
+    "Llama3-8B": dict(block_size=8192, n_layer=32, n_head=32, n_local_heads=8, dim=4096, intermediate_size=14336, vocab_size=128256),
     "Mistral-7B": dict(n_layer=32, n_head=32, n_local_heads=8, dim=4096, intermediate_size=14336, vocab_size=32000),
-    "stories15M": dict(n_layer=6, n_head=6, dim=288),
-    "stories110M": dict(n_layer=12, n_head=12, dim=768),
-    "Llama-3-8B": dict(block_size=8192, n_layer=32, n_head=32, n_local_heads=8, dim=4096, intermediate_size=14336, vocab_size=128256),
+    "stories-15M": dict(n_layer=6, n_head=6, dim=288),
+    "stories-110M": dict(n_layer=12, n_head=12, dim=768),
 }
 
 class KVCache(nn.Module):

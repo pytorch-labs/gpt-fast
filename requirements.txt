@@ -3,3 +3,8 @@ sentencepiece
 tiktoken
 scipy==1.14.1
 scikit-learn==1.5.2
+huggingface_hub
+torchao
+jsonpickle
+blobfile==3.0.0
+tabulate==0.9.0
