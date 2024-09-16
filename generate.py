@@ -12,6 +12,7 @@ from typing import Optional, Tuple, Union
 import torch
 import torch._dynamo.config
 import torch._inductor.config
+from torch.nn.attention.flex_attention import BlockMask, create_block_mask
 
 def device_sync(device):
     if "cuda" in device:
@@ -56,29 +57,39 @@ def sample(logits, temperature: float = 1.0, top_k: Optional[int] = None):
     idx_next = multinomial_sample_one_no_sync(probs)
     return idx_next, probs
 
+def roundup(val, multiplier):
+    return ((val - 1) // multiplier + 1) * multiplier
+
+def causal_mask(b, h, q, kv):
+    return q >= kv
+
 def prefill(model: Transformer, x: torch.Tensor, input_pos: torch.Tensor, **sampling_kwargs) -> torch.Tensor:
     # input_pos: [B, S]
-    logits = model(x, input_pos)
+    mask = create_block_mask(causal_mask, 1, 1, input_pos.shape[0], model.max_seq_length, device="cuda")
+    logits = model(mask, x, input_pos)
     return sample(logits, **sampling_kwargs)[0]
 
-def decode_one_token(model: Transformer, x: torch.Tensor, input_pos: torch.Tensor, **sampling_kwargs) -> Tuple[torch.Tensor, torch.Tensor]:
+def decode_one_token(model: Transformer, x: torch.Tensor, input_pos: torch.Tensor, block_mask: BlockMask, **sampling_kwargs) -> Tuple[torch.Tensor, torch.Tensor]:
     # input_pos: [B, 1]
     assert input_pos.shape[-1] == 1
-    logits = model(x, input_pos)
+    block_index = input_pos // block_mask.BLOCK_SIZE[0]
+    mask = block_mask[:, :, block_index]
+    mask.mask_mod = block_mask.mask_mod
+    logits = model(mask, x, input_pos)
     return sample(logits, **sampling_kwargs)
 
 def decode_n_tokens(model: Transformer, cur_token: torch.Tensor, input_pos: torch.Tensor, num_new_tokens: int, callback=lambda _: _, **sampling_kwargs):
+    block_mask = create_block_mask(causal_mask, 1, 1, model.max_seq_length, model.max_seq_length, device="cuda")
     new_tokens, new_probs = [], []
     for i in range(num_new_tokens):
-        with torch.backends.cuda.sdp_kernel(enable_flash=False, enable_mem_efficient=False, enable_math=True): # Actually better for Inductor to codegen attention here
-            next_token, next_prob = decode_one_token(
-                model, cur_token, input_pos, **sampling_kwargs
-            )
-            input_pos += 1
-            new_tokens.append(next_token.clone())
-            callback(new_tokens[-1])
-            new_probs.append(next_prob.clone())
-            cur_token = next_token.clone()
+        next_token, next_prob = decode_one_token(
+            model, cur_token, input_pos, block_mask, **sampling_kwargs
+        )
+        input_pos += 1
+        new_tokens.append(next_token.clone())
+        callback(new_tokens[-1])
+        new_probs.append(next_prob.clone())
+        cur_token = next_token.clone()
 
     return new_tokens, new_probs
 
