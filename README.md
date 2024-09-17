@@ -181,6 +181,42 @@ Note: Running on an A100 80GB, albeit power-limited to 330 watts. Empirically, s
 ENABLE_INTRA_NODE_COMM=1 torchrun --standalone --nproc_per_node=2 generate.py --compile --checkpoint_path checkpoints/$MODEL_REPO/model.pth
 ```
 
+## CHAI
+```
+git checkout chai
+pip install -r requirements.txt
+
+CHECKPOINT_DIR=… # put path here
+MODEL_NAME=Llama1-7B # other options: Llama2-7B, CodeLlama-7B
+```
+
+- Sample Generation
+```
+# Baseline
+python generate.py --sdpa naive --checkpoint_path $CHECKPOINT_DIR/model.pth  --model_name $MODEL_NAME
+
+# CHAI
+python generate.py --sdpa naive --chai_activate --checkpoint_path $CHECKPOINT_DIR/model.pth  --model_name $MODEL_NAME
+```
+
+- Natural Language Eval
+```
+# Baseline
+python eval.py --sdpa naive --checkpoint_path $CHECKPOINT_DIR/model.pth --model_name $MODEL_NAME --tasks piqa hellaswag arc_challenge arc_easy boolq
+
+# CHAI
+python eval.py --sdpa naive --chai_activate --checkpoint_path $CHECKPOINT_DIR/model.pth --model_name $MODEL_NAME --tasks piqa hellaswag arc_challenge arc_easy boolq
+```
+
+- Code Eval
+```
+# Baseline
+python eval_bigcode.py --checkpoint_path $CHECKPOINT_DIR/model.pth --model_name $MODEL_NAME --task humaneval --temperature 0.2 --top_p 0.95  --max_seq_len 512 --sdpa naive
+
+# CHAI
+python eval_bigcode.py --checkpoint_path $CHECKPOINT_DIR/model.pth --model_name $MODEL_NAME --task humaneval --temperature 0.2 --top_p 0.95  --max_seq_len 512 --sdpa naive --chai_activate
+```
+
 ## Experimental
 ### Evaluation
 We use the EleutherAI evaluation harness to evaluate our model accuracy. To evaluate the accuracy, make sure the evaluation harness is installed and pass your model checkpoint and desired tasks to eval.py.
