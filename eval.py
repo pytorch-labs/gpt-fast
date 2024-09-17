@@ -202,6 +202,10 @@ def main(
     tasks: list = ["hellaswag"],
     limit: Optional[int] = None,
     max_seq_length: Optional[int] = None,
+    model_name: Optional[str] = None,
+    sdpa: Optional[str] = None,
+    early_exit: int = -1,
+    chai_activate: bool = False,
 ) -> None:
     """Evaluates model on a task from the `lm-evaluation-harness` library.
 
@@ -224,7 +228,7 @@ def main(
 
     print("Loading model ...")
     t0 = time.time()
-    model = _load_model(checkpoint_path, device, precision, False)
+    model = _load_model(checkpoint_path, device, precision, False, model_name=model_name, early_exit=early_exit, sdpa=sdpa, chai_activate=chai_activate)
 
     torch.cuda.synchronize()
     print(f"Time to load model: {time.time() - t0:.02f} seconds.")
@@ -259,14 +263,18 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Your CLI description.')
 
     parser.add_argument('--checkpoint_path', type=Path, default=Path("checkpoints/meta-llama/Llama-2-7b-chat-hf/lit_model.pth"), help='Model checkpoint path.')
+    parser.add_argument('--model_name', type=str, default=None, help='Model name to help find the architecture of the model.')
     parser.add_argument('--compile', action='store_true', help='Whether to compile the model.')
     parser.add_argument('--tasks', nargs='+', type=str, default=["hellaswag"], help='list of lm-eluther tasks to evaluate usage: --tasks task1 task2')
     parser.add_argument('--limit', type=int, default=None, help='number of samples to evalulate')
     parser.add_argument('--max_seq_length', type=int, default=None, help='maximum length sequence to evaluate')
 
+    parser.add_argument('--sdpa', type=str, help='Implementation type for scaled dot product attention')
+    parser.add_argument('--early_exit', type=int, default=-1, help='The layer to exit early')
     parser.add_argument('--chai_activate', action='store_true', help='Enable clustered head attention inference')
 
     args = parser.parse_args()
     main(
         Path(args.checkpoint_path), args.compile, args.tasks, args.limit, args.max_seq_length,
+        args.model_name, args.sdpa, args.early_exit, args.chai_activate,
     )
