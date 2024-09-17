@@ -50,9 +50,14 @@ class ModelArgs:
         assert len(config) == 1, name
         return cls(**transformer_configs[config[0]])
 
+attn_output_multiplier = 0.08838834764831845
+embedding_multiplier_scale = 78.38367176906169
+output_multiplier_scale = 0.5773502691896257
+max_attn_val = 30.0
 
 transformer_configs = {
     "Mixtral-8x7B-v0.1": dict(block_size=32768, n_layer=32, n_head=32, n_local_heads=8, dim=4096, intermediate_size=14336, rope_base=1000000.0, num_experts=8, num_activated_experts=2),
+    "grok-1": dict(vocab_size=131072, block_size=8192, n_layer=64, n_head=48, n_local_heads=8, dim=6144, intermediate_size=32768, rope_base=1000000.0, num_experts=8, num_activated_experts=2),
 }
 
 class KVCache(nn.Module):
@@ -106,11 +111,13 @@ class Transformer(nn.Module):
         mask = self.causal_mask[None, None, input_pos]
         freqs_cis = self.freqs_cis[input_pos]
         x = self.tok_embeddings(idx)
+        x *= embedding_multiplier_scale
 
         for i, layer in enumerate(self.layers):
             x = layer(x, input_pos, freqs_cis, mask)
         x = self.norm(x)
         logits = self.output(x)
+        logits *= output_multiplier_scale
         return logits
 
     @classmethod
@@ -123,12 +130,14 @@ class TransformerBlock(nn.Module):
         super().__init__()
         self.attention = Attention(config)
         self.block_sparse_moe = MOEFeedForward(config)
-        self.ffn_norm = RMSNorm(config.dim, config.norm_eps)
-        self.attention_norm = RMSNorm(config.dim, config.norm_eps)
+        self.pre_moe_norm = RMSNorm(config.dim, config.norm_eps)
+        self.post_moe_norm = RMSNorm(config.dim, config.norm_eps)
+        self.post_attn_norm = RMSNorm(config.dim, config.norm_eps)
+        self.pre_attn_norm = RMSNorm(config.dim, config.norm_eps)
 
     def forward(self, x: Tensor, input_pos: Tensor, freqs_cis: Tensor, mask: Tensor) -> Tensor:
-        h = x + self.attention(self.attention_norm(x), freqs_cis, mask, input_pos)
-        out = h + self.block_sparse_moe(self.ffn_norm(h))
+        h = x + self.post_attn_norm(self.attention(self.pre_attn_norm(x), freqs_cis, mask, input_pos))
+        out = h + self.post_moe_norm(self.block_sparse_moe(self.pre_moe_norm(h)))
         return out
 
 
@@ -160,7 +169,8 @@ class Attention(nn.Module):
         bsz, seqlen, _ = x.shape
 
         kv_size = self.n_local_heads * self.head_dim
-        q, k, v = self.wqkv(x).split([self.dim, kv_size, kv_size], dim=-1)
+        qkv = self.wqkv(x)
+        q, k, v = qkv.split([self.dim, kv_size, kv_size], dim=-1)
 
         q = q.view(bsz, seqlen, self.n_head, self.head_dim)
         k = k.view(bsz, seqlen, self.n_local_heads, self.head_dim)
@@ -176,7 +186,13 @@ class Attention(nn.Module):
 
         k = k.repeat_interleave(self.n_head // self.n_local_heads, dim=1)
         v = v.repeat_interleave(self.n_head // self.n_local_heads, dim=1)
-        y = F.scaled_dot_product_attention(q, k, v, attn_mask=mask, dropout_p=0.0)
+        attn_weights = torch.matmul(q, k.transpose(2, 3)).to(torch.float32)
+        attn_weights = attn_weights * attn_output_multiplier
+        attn_weights = max_attn_val * F.tanh(attn_weights / max_attn_val)
+        attn_weights += torch.where(mask, 0, -float("inf"))
+        attn_weights = F.softmax(attn_weights, dim=-1).to(q.dtype)
+        y = torch.matmul(attn_weights, v)
+        # y = F.scaled_dot_product_attention(q, k, v, attn_mask=mask, dropout_p=0.0)
 
         y = y.transpose(1, 2).contiguous().view(bsz, seqlen, self.dim)
 
@@ -195,7 +211,7 @@ class ConditionalFeedForward(nn.Module):
         w1_weights = self.w1[expert_indices] # [T, A, D, D]
         w3_weights = self.w3[expert_indices] # [T, A, D, D]
         w2_weights = self.w2[expert_indices]  # [T, A, D, D]
-        x1 = F.silu(torch.einsum('ti,taoi -> tao', x, w1_weights))
+        x1 = F.gelu(torch.einsum('ti,taoi -> tao', x, w1_weights))
         x3 = torch.einsum('ti, taoi -> tao', x, w3_weights)
         expert_outs =  torch.einsum('tao, taio -> tai', (x1 * x3), w2_weights)
         return expert_outs

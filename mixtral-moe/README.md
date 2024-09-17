@@ -1,3 +1,12 @@
+# Grok-1 Support
+```
+export MODEL_REPO=hpcai-tech/grok-1
+python scripts/download.py --repo_id $MODEL_REPO
+python scripts/convert_hf_checkpoint.py --checkpoint_dir checkpoints/$MODEL_REPO
+python quantize.py --checkpoint_path checkpoints/$MODEL_REPO/model.pth --mode int8
+
+TOKENIZERS_PARALLELISM=false ENABLE_INTRA_NODE_COMM=1 time torchrun --standalone --nproc_per_node=8 generate.py  --checkpoint_path checkpoints/$MODEL_REPO/model_int8.pth   --compile --compile_prefill
+```
 # Mixtral 8x7B
 [Mixtral 8x7B](https://mistral.ai/news/mixtral-of-experts/) is a high-quality sparse mixture of experts (MoE) model that matches or beats GPT3.5 on most benchmarks. This repro is a simple and efficient PyTorch native implementation of Mixtral 8x7B.
 
