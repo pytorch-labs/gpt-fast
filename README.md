@@ -141,6 +141,20 @@ Benchmarks run on one GCD of a MI-250x.
 | Llama-2-7B  | Base    |  76.33  | 1028.70 |
 |           | 8-bit   | 101.86   | 700.06 |
 
+### Using Grouped Query Attention
+Benchmarks run on 1 NVIDIA H100.
+
+Using
+```bash
+export MODEL_REPO=meta-llama/Llama-2-7b-chat-hf
+```
+
+| Model    | Technique | Tokens/Second | Memory Bandwidth (GB/s) |
+| -------- | ------- | ------ | ------ |
+| Llama-2-7B | Base    | 146.66     | 1938.12 |
+|           | 8-bit   | 233.50    | 1543.55 |
+|           | 4-bit (G=32)   | 267.11    | 1103.14 |
+
 ## Generate Text
 
 Model definition in `model.py`, generation code in `generate.py`.
