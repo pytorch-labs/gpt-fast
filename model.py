@@ -60,7 +60,7 @@ class ModelArgs:
 
     sdpa: str = None
 
-    prune_after_layer: int = 16
+    prune_after_layer: int = 0
     chai_activate: bool = False
     num_clusters_list: list = field(
         default_factory=lambda: [
