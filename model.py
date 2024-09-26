@@ -60,9 +60,9 @@ class ModelArgs:
 
     sdpa: str = None
 
-    prune_layer: int = 15
+    prune_after_layer: int = 16
     chai_activate: bool = False
-    chai_layers: list = field(
+    num_clusters_list: list = field(
         default_factory=lambda: [
             28,
             28,
@@ -186,9 +186,9 @@ class Transformer(nn.Module):
         self.config = config
 
         self.tok_embeddings = nn.Embedding(config.vocab_size, config.dim)
-        self.prune_layer = config.prune_layer
+        self.prune_after_layer = config.prune_after_layer
         self.chai_activate = config.chai_activate
-        self.chai_layers = config.chai_layers
+        self.num_clusters_list = config.num_clusters_list
         self.layers = nn.ModuleList(TransformerBlock(i, config) for i in range(config.n_layer))
         self.norm = RMSNorm(config.dim, eps=config.norm_eps)
         self.output = nn.Linear(config.dim, config.vocab_size, bias=False)
@@ -306,8 +306,8 @@ class TransformerBlock(nn.Module):
         self.attention_norm = RMSNorm(config.dim, config.norm_eps)
         self.layer_id = layer_id
         self.chai_activate = config.chai_activate
-        self.prune_layer = config.prune_layer
-        self.chai_layer_param = config.chai_layers[layer_id] if layer_id < len(config.chai_layers) else config.chai_layers[-1]
+        self.prune_after_layer = config.prune_after_layer
+        self.chai_layer_param = config.num_clusters_list[layer_id] if layer_id < len(config.num_clusters_list) else config.num_clusters_list[-1]
 
     def forward(self, x: Tensor, input_pos: Tensor, freqs_cis: Tensor, mask: Tensor) -> Tensor:
         h = x + self.attention(self.attention_norm(x), freqs_cis, mask, input_pos)
@@ -341,8 +341,9 @@ class Attention(nn.Module):
 
         self.layer_id = layer_id
         self.chai_activate = config.chai_activate
-        self.prune_layer = config.prune_layer
-        self.chai_layer_param = config.chai_layers[layer_id] if layer_id < len(config.chai_layers) else config.chai_layers[-1]
+        self.prune_after_layer = config.prune_after_layer
+        self.num_clusters_list = config.num_clusters_list
+        self.chai_layer_param = config.num_clusters_list[layer_id] if layer_id < len(config.num_clusters_list) else config.num_clusters_list[-1]
 
     def load_hook(self, state_dict, prefix, *args):
         if prefix + "wq.weight" in state_dict:
@@ -371,125 +372,154 @@ class Attention(nn.Module):
         if self.kv_cache is not None:
             k, v = self.kv_cache.update(input_pos, k, v)
 
-        if self.chai_activate and self.layer_id >= self.prune_layer:
-            cluster_assignment_log_per_example = dict()
-            if input_pos[0] == 0:
-                # first sentence
+        # BEGIN CHAI
+        if self.chai_activate and self.layer_id >= self.prune_after_layer and self.layer_id != 31:
+            xk = k[:, :, :input_pos[0]+seqlen, :]
+            xq = q
+            import time
+            assert mask is not None
+            xk_new = torch.zeros_like(xk)
 
-                k = self.kv_cache.k_cache[:bsz, :, : input_pos[0] + seqlen, :]
-                v = self.kv_cache.v_cache[:bsz, :, : input_pos[0] + seqlen, :]
-                q = q.view(bsz, self.n_local_heads, seqlen, self.head_dim)
-                k = k.view(bsz, self.n_local_heads, seqlen, self.head_dim)
-                num_examples, num_org_heads, seq_len, head_dim = q.shape
-                q_four = q[:, :, :5, :]
-                k_four = k[:, :, :5, :]
-                scores_four = F.softmax(
-                    (
-                        torch.matmul(q_four, k_four.transpose(2, 3))
-                        / math.sqrt(self.head_dim)
-                    ).float(),
-                    dim=-1,
-                )
-                scores_four_numpy = scores_four.cpu().numpy()
-                scores_new_xk_xq = torch.zeros(
-                    [num_examples, num_org_heads, seq_len, seq_len],
-                    device=q.device,
-                    dtype=q.dtype,
-                )
-                k_new = torch.zeros(
-                    [num_examples, self.chai_layer_param, seq_len, head_dim],
-                    dtype=k.dtype,
-                    device=k.device,
-                )
-                q_new = torch.zeros(
-                    [num_examples, self.chai_layer_param, seq_len, head_dim],
-                    dtype=q.dtype,
-                    device=q.device,
-                )
-                for ex_id in range(num_examples):
-                    assert num_examples == 1
-                    temp_data = dict()
-                    ex_id_score = scores_four_numpy[ex_id, :]
-                    # if ex_id_score.shape[1] > 4:
-                    # use_small = False
-                    num_heads = ex_id_score.shape[0]
-                    first_sample_score = ex_id_score.reshape((num_heads, -1))
+            # we are going to take average of score values
+            # print("both qk acutal single example")
+
+            cluster_assignment_log_per_example = dict()
+            num_examples, num_org_heads, seq_len, head_dim = xq.shape
+            xq_four = xq[:, :, :5, :]
+            xk_four = xk[:, :, :5, :]
+            # import ipdb
+            # ipdb.set_trace()
+            scores_four = F.softmax(
+                (
+                    torch.matmul(xq_four, xk_four.transpose(2, 3))
+                    / math.sqrt(self.head_dim)
+                ).float(),
+                dim=-1,
+            )
+            scores_four_numpy = scores_four.cpu().numpy()
+            # initialize score
+            # import ipdb
+            # ipdb.set_trace()
+            scores_new_xk_xq = torch.zeros(
+                [num_examples, num_org_heads, seq_len, seq_len],
+                device=xq.device,
+                dtype=xq.dtype,
+            )
+            # score_new = torch.zeros_like()
+
+            xk_new = torch.zeros(
+                [
+                    num_examples,
+                    self.num_clusters_list[self.layer_id],
+                    seq_len,
+                    head_dim,
+                ],
+                dtype=xk.dtype,
+                device=xk.device,
+            )
+            xq_new = torch.zeros(
+                [
+                    num_examples,
+                    self.num_clusters_list[self.layer_id],
+                    seq_len,
+                    head_dim,
+                ],
+                dtype=xq.dtype,
+                device=xq.device,
+            )
+            # clustering
+            use_small = False
+            for ex_id in range(num_examples):
+                temp_data = dict()
+                ex_id_score = scores_four_numpy[ex_id, :]
+                sequence_length_example = ex_id_score.shape[1]
+                # for slen_ex in range(sequence_length_example):
+                if ex_id_score.shape[1] > 4:
+                    # import
+                    use_small = True
+                    first_sample_score = ex_id_score[:, 4, : 4 + 1]
+                    start_time = time.time()
                     dist_arr = cdist(
                         first_sample_score, first_sample_score, metric="cosine"
                     )
                     cluster = AgglomerativeClustering(
-                        n_clusters=self.chai_layer_param,
+                        n_clusters=self.num_clusters_list[self.layer_id],
                         metric="precomputed",
                         linkage="average",
                     )
                     try:
                         cluster = cluster.fit(dist_arr)
+                        end_time = time.time()
+                        print(
+                            "Time k-means {} ms".format(
+                                (end_time - start_time) * 1000
+                            )
+                        )
                     except:
                         import ipdb
-
                         ipdb.set_trace()
+
                     cluster_assignment = cluster.labels_
-                    self.grouping = cluster_assignment
-                    for cluster_idx in range(self.chai_layer_param):
-                        grouped_heads = np.where(cluster_assignment == cluster_idx)[
-                            0
-                        ].tolist()
+                    for cluster_idx in range(
+                        self.num_clusters_list[self.layer_id]
+                    ):
+                        grouped_heads = np.where(
+                            cluster_assignment == cluster_idx
+                        )[0].tolist()
+                        # first_score = scores[ex_id, grouped_heads[0], :, :]
+                        # score_new[ex_id, grouped_heads, :, :] = first_score
+                        # replacing the grouped heads
+                        xk_new[ex_id, cluster_idx, :, :] = xk[
+                            ex_id, grouped_heads[0], :, :
+                        ]
+                        xq_new[ex_id, cluster_idx, :, :] = xq[
+                            ex_id, grouped_heads[0], :, :
+                        ]
                         temp_data[cluster_idx] = grouped_heads
+                    # store them for back broadcast
                     cluster_assignment_log_per_example[ex_id] = temp_data
-                    # else:
-                    # cluster_assignment_log_per_example[ex_id] = temp_data
-                    # xk_new = xk
-                    # xq_new = xq
-                    selected = [np.where(self.grouping == cluster_idx)[0].tolist()[0] for cluster_idx in range(self.chai_layer_param)]
-                    k_new[ex_id, :, :, :] = k[ex_id, selected, :, :]
-                    q_new[ex_id, :, :, :] = q[ex_id, selected, :, :]
-            else:
-                # scores
-                k = self.kv_cache.k_cache[:bsz, :, : input_pos[0] + seqlen, :]
-                v = self.kv_cache.v_cache[:bsz, :, : input_pos[0] + seqlen, :]
-                q = q.view(bsz, self.n_local_heads, 1, self.head_dim)
-                k = k.view(bsz, self.n_local_heads, input_pos[0] + seqlen, self.head_dim)
-                num_examples, num_org_heads, seq_len, head_dim = k.shape
-                scores_new_xk_xq = torch.zeros(
-                    [num_examples, num_org_heads, 1, seq_len],
-                    device=q.device,
-                    dtype=q.dtype,
-                )
-                cluster_assignment = self.grouping
-                for ex_id in range(num_examples):
-                    selected = [np.where(self.grouping == cluster_idx)[0].tolist()[0] for cluster_idx in range(self.chai_layer_param)]
-                    temp_data = dict()
-                    for cluster_idx in range(self.chai_layer_param):
-                        grouped_heads = np.where(cluster_assignment == cluster_idx)[
-                            0
-                        ].tolist()
-                        temp_data[cluster_idx] = grouped_heads
+
+                else:
                     cluster_assignment_log_per_example[ex_id] = temp_data
-                k_new = k[:, selected, :, :]
-                q_new = q[:, selected, :, :]
+                    # score_new = scores
+                    xk_new = xk
+                    xq_new = xq
 
-            scores_new_temp = torch.matmul(q_new, k_new.transpose(2, 3)) / math.sqrt(
-                self.head_dim
-            )
-            # if use_small:
-            # putting them back together
-            cluster_idx_index = torch.zeros(num_org_heads, dtype=torch.int)
-            for ex_id in range(num_examples):
-                for cluster_idx in range(self.chai_layer_param):
-                    cluster_idx_index[cluster_assignment_log_per_example[ex_id][cluster_idx]] = cluster_idx
-                scores_new_xk_xq[ex_id, :, :, :] = scores_new_temp[ex_id, cluster_idx_index, :, :]
-
-            # else:
-            # scores_new_xk_xq = scores_new_temp
-            if mask is not None:
-                scores_new_xk_xq = scores_new_xk_xq + mask[:, :, :, :seq_len]
-            scores_new_xk_xq = F.softmax(scores_new_xk_xq.float(), dim=-1).type_as(q)
-            scores = scores_new_xk_xq
-            # v = v.transpose(1, 2)
-            output = torch.matmul(scores, v)  # (bs, n_local_heads, slen, head_dim)
+                scores_new_temp = torch.matmul(
+                    xq_new, xk_new.transpose(2, 3)
+                ) / math.sqrt(self.head_dim)
+                # import ipdb
+                # ipdb.set_trace()
+                if use_small:
+                    for ex_id in range(num_examples):
+                        for cluster_idx in range(
+                            self.num_clusters_list[self.layer_id]
+                        ):
+                            scores_new_xk_xq[
+                                ex_id,
+                                cluster_assignment_log_per_example[ex_id][
+                                    cluster_idx
+                                ],
+                                :,
+                                :,
+                            ] = scores_new_temp[ex_id, cluster_idx, :, :]
+                else:
+                    scores_new_xk_xq = scores_new_temp
+                scores_new_xk_xq = (
+                    scores_new_xk_xq + mask[:, :, :, :seqlen]
+                )  # (bs, n_local_heads, slen, cache_len + slen)
+                scores_new_xk_xq = F.softmax(
+                    scores_new_xk_xq.float(), dim=-1
+                ).type_as(xq)
+                # switching both q and k
+                # print("Norm scores {}".format(torch.norm(scores)))
+                # print("Norm score new {}".format(torch.norm(score_new)))
+                # print("Norm score xk, xq {}".format(torch.norm(scores_new_xk_xq)))
+                scores = scores_new_xk_xq
+            # END CHAI
+            output = torch.matmul(scores, v[:, :, :scores.shape[3], :])  # (bs, n_local_heads, slen, head_dim)
             output = output.transpose(1, 2).contiguous().view(bsz, seqlen, -1)
             return self.wo(output)
-
         else:
             k = k.repeat_interleave(self.n_head // self.n_local_heads, dim=1)
             v = v.repeat_interleave(self.n_head // self.n_local_heads, dim=1)
