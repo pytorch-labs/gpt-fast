@@ -3,3 +3,4 @@ sentencepiece
 tiktoken
 blobfile
 safetensors
+huggingface-hub
