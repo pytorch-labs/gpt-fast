@@ -21,6 +21,9 @@ class TokenizerInterface:
     def eos_id(self):
         raise NotImplementedError("This method should be overridden by subclasses.")
 
+    def pad_id(self):
+        raise NotImplementedError("This method should be overridden by subclasses.")
+
 class SentencePieceWrapper(TokenizerInterface):
     def __init__(self, model_path):
         super().__init__(model_path)
@@ -36,6 +39,10 @@ class SentencePieceWrapper(TokenizerInterface):
         return self.processor.bos_id()
 
     def eos_id(self):
+        return self.processor.eos_id()
+
+    def pad_id(self):
+        # TODO: handle other models that do have pad_id
         return self.processor.eos_id()
 
 class TiktokenWrapper(TokenizerInterface):
@@ -92,6 +99,10 @@ class TiktokenWrapper(TokenizerInterface):
         return self._bos_id
 
     def eos_id(self):
+        return self._eos_id
+
+    def pad_id(self):
+        # TODO: handle other models that do have pad_id
         return self._eos_id
 
 def get_tokenizer(tokenizer_model_path, model_name):
