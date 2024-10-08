@@ -124,8 +124,8 @@ def group_quantize_tensor_from_qparams(w, scales, zeros, n_bit=4, groupsize=128)
         .to(torch.int32)
         .reshape_as(w)
     )
-
-    return w_int32
+    w_uint8 = (w_int32[::,::2] << 4 | w_int32[::,1::2]).to(torch.uint8)
+    return w_uint8
 
 
 def group_quantize_tensor(w, n_bit=4, groupsize=128):
@@ -335,6 +335,18 @@ class WeightOnlyInt8QuantHandler:
         replace_linear_weight_only_int8_per_channel(self.mod)
         return self.mod
 
+# TODO: This is a workaround to speedup int8 woq performance. Will remove this when
+# https://github.com/pytorch/pytorch/pull/120985 is in PyTorch stable release.
+def linear_forward_int8(x, weight_int8pack, scales, out_features):
+    if x.is_cuda:
+        return F.linear(x, weight_int8pack.to(dtype=x.dtype)) * scales
+
+    origin_x_size = x.size()
+    x = x.reshape(-1, origin_x_size[-1])
+    c = torch.ops.aten._weight_int8pack_mm(x, weight_int8pack, scales)
+    new_shape = origin_x_size[:-1] + (out_features,)
+    c = c.reshape(new_shape)
+    return c
 
 class WeightOnlyInt8Linear(torch.nn.Module):
     __constants__ = ['in_features', 'out_features']
@@ -352,15 +364,19 @@ class WeightOnlyInt8Linear(torch.nn.Module):
         self.register_buffer("scales", torch.ones(out_features, dtype=torch.bfloat16))
 
     def forward(self, input: torch.Tensor) -> torch.Tensor:
-        return F.linear(input, self.weight.to(dtype=input.dtype)) * self.scales
+        # return F.linear(input, self.weight.to(dtype=input.dtype)) * self.scales
+        # TODO: This is a workaround to speedup int8 woq performance. Will remove this when
+        # https://github.com/pytorch/pytorch/pull/120985 is in PyTorch stable release.
+        return linear_forward_int8(
+           input,
+           self.weight, self.scales, self.out_features)
 
 ##### weight only int4 per channel groupwise quantized code ######
 
 def prepare_int4_weight_and_scales_and_zeros(weight_bf16, groupsize, inner_k_tiles):
-    weight_int32, scales_and_zeros = group_quantize_tensor(
+    weight_int4pack, scales_and_zeros = group_quantize_tensor(
         weight_bf16, n_bit=4, groupsize=groupsize
     )
-    weight_int4pack = torch.ops.aten._convert_weight_to_int4pack(weight_int32, inner_k_tiles)
     return weight_int4pack, scales_and_zeros
 
 
@@ -404,7 +420,7 @@ class WeightOnlyInt4QuantHandler:
 
     @torch.no_grad()
     def create_quantized_state_dict(self, use_cuda = True):
-        if use_cuda:
+        if use_cuda and torch.cuda.is_available():
             device="cuda"
         else:
             device="cpu"
@@ -507,7 +523,7 @@ class WeightOnlyInt4Linear(torch.nn.Module):
         assert in_features % (inner_k_tiles * 16) == 0, "require in_features % (innerKTiles * 16) == 0"
         self.register_buffer(
             "weight",
-            torch.empty((out_features // 8, in_features // (inner_k_tiles * 16), 32, inner_k_tiles // 2), dtype=torch.int32)
+            torch.empty((out_features, in_features // 2), dtype=torch.uint8)
         )
         self.register_buffer(
             "scales_and_zeros",
