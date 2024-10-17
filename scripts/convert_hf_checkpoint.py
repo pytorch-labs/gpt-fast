@@ -34,7 +34,7 @@ def convert_hf_checkpoint(
     # weights is state dict are the same in each consolidated.NN.pth file. Thus, it is not
     # currently supported.
     # Along this, we need to copy the original/tokenizer.model file to tokenizer.model.tiktoken
-    is_llama3 = "Llama-3" in model_name
+    is_llama3 = "Llama-3" in model_name or "Llama3" in model_name
     if is_llama3:
         # Check if we have multiple original/consolidated.NN.pth files and report error
         # if we do for Llama 3.
