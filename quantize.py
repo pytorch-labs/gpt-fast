@@ -554,22 +554,33 @@ def quantize(
     model.load_state_dict(checkpoint, assign=True)
     model = model.to(dtype=precision, device=device)
 
-    if mode == 'int8':
+    dir_name = checkpoint_path.parent
+    base_name = checkpoint_path.name
+
+    if 'torchao-int4' in mode:
+        import torchao
+        from torchao.quantization import (quantize_, int4_weight_only)            
+        use_hqq = 'hqq' in mode
+        print(f"Quantizing model weights for int4 weight-only symmetric per-channel quantization {'with hqq' if use_hqq else ''}")
+        quantize_(model, int4_weight_only(group_size=groupsize, use_hqq=use_hqq), device='cuda')
+        quantized_state_dict = model.state_dict()
+        new_base_name = base_name.replace('.pth', f'{label}{mode}.pth')
+    elif 'torchao-int8' in mode:
+        import torchao
+        from torchao.quantization import (quantize_, int8_weight_only)      
+        print("Quantizing model weights for int8 weight-only symmetric per-channel quantization")
+        quantize_(model, int8_weight_only())
+        quantized_state_dict = model.state_dict()
+        new_base_name = base_name.replace('.pth', f'{label}{mode}.pth')
+    elif mode == 'int8':
         print("Quantizing model weights for int8 weight-only symmetric per-channel quantization")
         quant_handler = WeightOnlyInt8QuantHandler(model)
         quantized_state_dict = quant_handler.create_quantized_state_dict()
-
-        dir_name = checkpoint_path.parent
-        base_name = checkpoint_path.name
         new_base_name = base_name.replace('.pth', f'{label}int8.pth')
-
     elif mode == 'int4':
         print("Quantizing model weights for int4 weight-only affine per-channel groupwise quantization")
         quant_handler = WeightOnlyInt4QuantHandler(model, groupsize)
         quantized_state_dict = quant_handler.create_quantized_state_dict()
-
-        dir_name = checkpoint_path.parent
-        base_name = checkpoint_path.name
         new_base_name = base_name.replace('.pth', f"{label}int4.g{groupsize}.pth")
 
     elif mode == 'int4-gptq':
@@ -590,12 +601,9 @@ def quantize(
             calibration_seq_length,
             pad_calibration_inputs
         )
-
-        dir_name = checkpoint_path.parent
-        base_name = checkpoint_path.name
         new_base_name = base_name.replace('.pth', f"{label}int4-gptq.g{groupsize}.pth")
     else:
-        raise ValueError(f"Invalid quantization mode {mode} needs to be one of [int8, int4, int4-gpptq]")
+        raise ValueError(f"Invalid quantization mode {mode} needs to be one of [int8, int4, int4-gpptq, torchao-int4, torchao-int8, torchao-int4-hqq]")
 
     quantize_path = dir_name / new_base_name
     print(f"Writing quantized weights to {quantize_path}")
@@ -608,7 +616,7 @@ if __name__ == '__main__':
     import argparse
     parser = argparse.ArgumentParser(description='Quantize a model.')
     parser.add_argument('--checkpoint_path', type=Path, default=Path("checkpoints/meta-llama/Llama-2-7b-chat-hf/model.pth"), help='Path to the model checkpoint to be quantized.')
-    parser.add_argument('--mode', '-q', type=str, default='int8', choices=['int8', 'int4', 'int4-gptq'], help='type of quantization to perform')
+    parser.add_argument('--mode', '-q', type=str, default='int8', choices=['int8', 'int4', 'int4-gptq', 'torchao-int4', 'torchao-int8', 'torchao-int4-hqq'], help='type of quantization to perform')
     parser.add_argument('--groupsize', type=int, default=32, help='Group size for int4 quantization.')
     parser.add_argument('--calibration_tasks', type=str, nargs='+', default=['wikitext'], help='tasks to do gptq calibration on, if doing gptq')
     parser.add_argument('--calibration_limit', type=int, default=1000, help='number of samples to use for gptq calibration')

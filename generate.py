@@ -221,13 +221,16 @@ def _load_model(checkpoint_path, device, precision, use_tp):
     with torch.device('meta'):
         model = Transformer.from_name(checkpoint_path.parent.name)
 
-    if "int8" in str(checkpoint_path):
+    # don't have to transform the model when using torchao apis
+    is_torchao = 'torchao-' in str(checkpoint_path)
+
+    if "int8" in str(checkpoint_path) and not is_torchao:
         print("Using int8 weight-only quantization!")
         from quantize import WeightOnlyInt8QuantHandler
         simple_quantizer = WeightOnlyInt8QuantHandler(model)
         model = simple_quantizer.convert_for_runtime()
 
-    if "int4" in str(checkpoint_path):
+    if "int4" in str(checkpoint_path) and not is_torchao:
         print("Using int4 weight-only quantization!")
         path_comps = checkpoint_path.name.split(".")
         groupsize = int(path_comps[-2][1:])
@@ -235,7 +238,7 @@ def _load_model(checkpoint_path, device, precision, use_tp):
         simple_quantizer = WeightOnlyInt4QuantHandler(model, groupsize)
         model = simple_quantizer.convert_for_runtime()
 
-    checkpoint = torch.load(str(checkpoint_path), mmap=True, weights_only=True)
+    checkpoint = torch.load(str(checkpoint_path), mmap=True, weights_only=not is_torchao)
     if "model" in checkpoint and "stories" in str(checkpoint_path):
         checkpoint = checkpoint["model"]
     model.load_state_dict(checkpoint, assign=True)

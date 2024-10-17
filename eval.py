@@ -92,7 +92,11 @@ class GPTFastEvalWrapper(eval_wrapper):
         tokenizer,
         max_seq_length: Optional[int]=None,
     ):
-        super().__init__()
+        try:
+            super().__init__()
+        except TypeError:
+             # lm_eval 0.4.2 removed the default init
+            super().__init__("gpt2", device="cuda")
         self._model = model
         self._tokenizer = tokenizer
         self._device = torch.device('cuda')
