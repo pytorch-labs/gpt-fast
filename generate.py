@@ -374,13 +374,6 @@ def main(
     if is_speculative:
         draft_model = _load_model(draft_checkpoint_path, device, precision, use_tp)
     elif self_speculative:
-        # Mean Accepted: 1.6445916114790287
-        # Average tokens/sec: 58.78
-        # Memory used: 27.49 GB
-        # draft_model = _load_model(checkpoint_path, device, precision, use_tp, early_exit=early_exit)
-        # Mean Accepted: 9.3109243697479
-        # Average tokens/sec: 92.41
-        # Memory used: 13.89 GB
         draft_model = model
         is_speculative = True
     else:
