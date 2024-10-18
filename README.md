@@ -171,9 +171,11 @@ python generate.py --compile --checkpoint_path checkpoints/$MODEL_REPO/model.pth
 Note: Running on an A100 80GB, albeit power-limited to 330 watts. Empirically, seems like peak bandwidth is about 1700 GB/s.
 
 ## Self-Speculative Sampling
-To generate with self-speculative sampling, you can use a main model that has been trained or finetuned using the [LayerSkip](https://arxiv.org/abs/2404.16710) recipe. You may use [facebook/layerskip-llama2-7B](https://huggingface.co/facebook/layerskip-llama2-13B) or [facebook/layerskip-llama2-13B](https://huggingface.co/facebook/layerskip-llama2-13B):
+To generate with self-speculative sampling, you can use a main model that has been trained or finetuned using the [LayerSkip](https://arxiv.org/abs/2404.16710) recipe. 
+
+You may set `MODEL_REPO` to any of the [LayerSkip checkpoints available on HuggingFace](https://huggingface.co/collections/facebook/layerskip-666b25c50c8ae90e1965727a).
 ```
-export MODEL_REPO=facebook/layerskip-llama2-7B
+MODEL_REPO=facebook/layerskip-llama2-7B
 ./scripts/prepare.sh $MODEL_REPO
 python scripts/convert_hf_checkpoint.py --checkpoint_dir checkpoints/$MODEL_REPO
 ```
@@ -182,6 +184,7 @@ In this example, the draft stage exits early at layer 5:
 ```
 python generate.py --compile --checkpoint_path checkpoints/$MODEL_REPO/model.pth --top_k 100 --temperature 0.6 --self_speculative --early_exit 5 --speculate_k 3
 ```
+
 
 ## Tensor Parallelism
 ```bash
