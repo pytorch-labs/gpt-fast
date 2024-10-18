@@ -180,6 +180,17 @@ To run with int4, just pass the int4 checkpoint to generate.py.
 python generate.py --checkpoint_path checkpoints/$MODEL_REPO/model_int4.g32.pth --compile
 ```
 
+### TorchAO Quantization APIs
+There are also options to use TorchAO apis with quantize.py using the  torchao-int4, torchao-int8 and torchao-int4-hqq options
+To generate this version of the model
+```bash
+# Spits out model at checkpoints/$MODEL_REPO/model_torchao-int4.pth
+python quantize.py --checkpoint_path checkpoints/$MODEL_REPO/model.pth --mode torchao-int4-hqq --groupsize 32
+```
+In addition to adding the hqq option for int4 quantization, the primary difference between the TorchAO quantization apis and the gpt-fast ones are that the checkpoints saved using the TorchAO apis
+can be loaded directly, rather than requiring
+
+
 ## Speculative Sampling
 To generate with speculative sampling (DRAFT_MODEL_REPO should point to a smaller model compared with MODEL_REPO).
 
