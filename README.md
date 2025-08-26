@@ -4,7 +4,7 @@ Simple and efficient pytorch-native transformer text generation.
 Featuring:
 1. Very low latency
 2. <1000 lines of python
-3. No dependencies other than PyTorch and sentencepiece
+3. No dependencies other than PyTorch and sentencepiece/tiktoken
 4. int8/int4 quantization
 5. Speculative decoding
 6. Tensor parallelism
