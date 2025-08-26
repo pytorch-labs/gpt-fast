@@ -12,6 +12,7 @@ from typing import Optional, Tuple
 import torch
 import torch._dynamo.config
 import torch._inductor.config
+torch._inductor.config.cpp.enable_kernel_profile = True
 
 def device_sync(device):
     if "cuda" in device:
@@ -132,7 +133,7 @@ def encode_tokens(tokenizer, string, bos=True, device='cuda'):
     tokens = tokenizer.encode(string)
     if bos:
         tokens = [tokenizer.bos_id()] + tokens
-    return torch.tensor(tokens, dtype=torch.int, device=device)
+    return torch.tensor(tokens, dtype=torch.int, device=args.device)
 
 def _load_model(checkpoint_path, device, precision, use_tp):
     with torch.device('meta'):
@@ -248,8 +249,13 @@ def main(
         if (i != num_samples - 1 or not profile) or (use_tp and rank != 0):
             prof = contextlib.nullcontext()
         else:
-            torch.profiler._utils._init_for_cuda_graphs()
-            prof = torch.profiler.profile()
+            if device == 'cuda':
+                torch.profiler._utils._init_for_cuda_graphs()
+                prof = torch.profiler.profile(activities=[torch.profiler.ProfilerActivity.CPU, torch.profiler.ProfilerActivity.CUDA], use_cuda=True)
+                profile_sort = 'self_cuda_time_total'
+            elif device == 'cpu':
+                prof = torch.profiler.profile(activities=[torch.profiler.ProfilerActivity.CPU])
+                profile_sort = 'self_cpu_time_total'
         with prof:
             y = generate(
                 model,
@@ -263,6 +269,8 @@ def main(
         if i == -1:
             print(f"Compilation time: {time.perf_counter() - t0:.2f} seconds")
             continue
+        if hasattr(prof, "key_averages"):
+            print(prof.key_averages().table(sort_by=profile_sort, row_limit=-1))
         if hasattr(prof, "export_chrome_trace"):
             if use_tp:
                 prof.export_chrome_trace(f"{profile}_rank_{rank}.json")
