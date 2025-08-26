@@ -6,11 +6,12 @@
 import sys
 import time
 from pathlib import Path
-from typing import Optional
+from typing import List, Optional, Tuple
 
 import torch
 import torch._dynamo.config
 import torch._inductor.config
+from torch.nn.utils.rnn import pad_sequence
 
 torch._dynamo.config.automatic_dynamic_shapes = True
 torch._inductor.config.triton.unique_kernel_names = True
@@ -20,6 +21,7 @@ torch._dynamo.config.cache_size_limit = 100000
 from tokenizer import get_tokenizer
 
 from model import Transformer
+from generate import generate
 
 try:
     import lm_eval
@@ -90,12 +92,14 @@ class GPTFastEvalWrapper(eval_wrapper):
         model: Transformer,
         tokenizer,
         max_seq_length: Optional[int]=None,
+        batch_size: int = 1,
     ):
         super().__init__()
         self._model = model
         self._tokenizer = tokenizer
         self._device = torch.device('cuda')
         self._max_seq_length = 2048 if max_seq_length is None else max_seq_length
+        self._batch_size = batch_size
 
     @property
     def eot_token_id(self):
@@ -111,7 +115,7 @@ class GPTFastEvalWrapper(eval_wrapper):
 
     @property
     def batch_size(self):
-        return 1
+        return self._batch_size
 
     @property
     def device(self):
@@ -125,6 +129,24 @@ class GPTFastEvalWrapper(eval_wrapper):
         # TODO: verify this for multi-batch as well
         encoded = encoded.tolist()
         return encoded
+
+    def tok_batch_encode(
+        self, text: List[str], **kwargs
+    ) -> Tuple[torch.Tensor, torch.Tensor]:
+        tokenized_text = [self.tok_encode(x) for x in text]
+
+        # pad left
+        x = pad_sequence(
+            [
+                torch.tensor(x[::-1]) for x in tokenized_text
+            ],  # first flip each sequence and pad
+            batch_first=True,
+            padding_value=self._tokenizer.pad_id(),
+        ).flip(
+            dims=[1]
+        )  # flip back to correct order
+
+        return x, torch.ones_like(x)  # return 'mask' b/c it's expected by the harness
 
     def tok_decode(self, tokens):
         decoded = self._tokenizer.decode(tokens)
@@ -146,8 +168,49 @@ class GPTFastEvalWrapper(eval_wrapper):
         logits = model_forward(self._model, x, input_pos)
         return logits
 
-    def _model_generate(self, context, max_length, eos_token_id):
-        raise Exception('unimplemented')
+    def _model_generate(self, context, max_length, stop, **generation_kwargs):
+        curr_batch_size = context.size(0)
+        assert curr_batch_size == 1, "Currently generation only supports batch size of 1. Provided prompt has batch size {curr_batch_size}."
+
+        # temperature = 0.0 if not set
+        # if do_sample is false and temp==0.0:
+        # remove temperature, as do_sample=False takes care of this
+        # and we don't want a warning from HF
+        generation_kwargs["temperature"] = generation_kwargs.get("temperature", 0.0)
+        do_sample = generation_kwargs.get("do_sample", None)
+
+        # The temperature has to be a strictly positive float -- if it is 0.0, use greedy decoding strategies
+        if generation_kwargs.get("temperature") == 0.0 and do_sample is None:
+            generation_kwargs["do_sample"] = do_sample = False
+
+        # TODO: handle top_p and top_k
+
+        # Setup caches for a given batch size
+        # Technically this is not necessary, but it's a good way to ensure that
+        # the caches won't error on a different batch size. In addition, caches
+        # are not needed for a regular model call, so we just setup here
+        # TODO: call setup_cache_padded_seq_input_pos_max_seq_length_for_prefill() instead
+        with context.device:
+            self._model.setup_caches(max_batch_size=curr_batch_size, max_seq_length=max_length)
+
+        # TODO: currently, the generate() function assumes 1D tensor with batch size 1. Need to update it to accept 2D tensor
+        context = context.flatten(0)
+
+        toks, accept_counts = generate(
+            self._model,
+            context,
+            max_new_tokens=self.max_gen_toks,
+            interactive=False,
+            draft_model=None,
+            temperature=generation_kwargs["temperature"],
+            # top_k=None,  # do_sample is not supported currently
+            # stop_tokens=self._tokenizer.stop_tokens,
+        )
+
+        # TODO: output from generate() is 1D tensor with batch size 1. Need to update to return 2D tensor.
+        toks = toks.unsqueeze(0)
+
+        return torch.tensor(toks, dtype=torch.int32)
 
 
 @torch.no_grad()

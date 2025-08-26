@@ -205,8 +205,6 @@ We use the EleutherAI evaluation harness to evaluate our model accuracy. To eval
 python eval.py --checkpoint_path checkpoints/$MODEL_REPO/model.pth --compile --tasks hellaswag winogrande
 ```
 
-Note: Generative tasks are currently not supported for gpt-fast
-
 Installation Instructions for the evaluation harness: https://github.com/EleutherAI/lm-evaluation-harness/tree/master#install
 
 ### GPTQ
