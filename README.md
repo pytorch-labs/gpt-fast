@@ -62,7 +62,7 @@ Then login with `huggingface-cli login`
 ## Downloading Weights
 Models tested/supported
 ```text
-tinyllamas/stories{15,42,100}
+tinyllamas/stories{15M,42M,100M}
 openlm-research/open_llama_7b
 meta-llama/Llama-2-7b-chat-hf
 meta-llama/Llama-2-13b-chat-hf

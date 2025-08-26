@@ -78,7 +78,9 @@ transformer_configs = {
     "34B": dict(n_layer=48, n_head=64, dim=8192, vocab_size=32000, n_local_heads=8, intermediate_size=22016, rope_base=1000000), # CodeLlama-34B-Python-hf
     "70B": dict(n_layer=80, n_head=64, dim=8192, n_local_heads=8, intermediate_size=28672),
     "Mistral-7B": dict(n_layer=32, n_head=32, n_local_heads=8, dim=4096, intermediate_size=14336, vocab_size=32000),
+    # For stories model, refer https://github.com/karpathy/llama2.c?tab=readme-ov-file#models
     "stories15M": dict(n_layer=6, n_head=6, dim=288),
+    "stories42M": dict(n_layer=8, n_head=8, dim=512, intermediate_size=1376),
     "stories110M": dict(n_layer=12, n_head=12, dim=768),
 
     "llama-3-8b": dict(block_size=8192, n_layer=32, n_head=32, n_local_heads=8, dim=4096, intermediate_size=14336, vocab_size=128256, rope_base=500000),
