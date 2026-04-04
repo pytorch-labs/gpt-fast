@@ -372,22 +372,30 @@ def main(
             if is_chat:
                 prompt = f"{B_INST} {prompt.strip()} {E_INST}"
             encoded = encode_tokens(tokenizer, prompt, bos=True, device=device)
-
+        
         if interactive and i >= 0:
-            buffer = []
-            period_id = tokenizer.encode('.')[0]
+            all_tokens = []
             done_generating = False
+            print_offset = 0
+            
             def callback(x):
-                nonlocal done_generating
+                nonlocal done_generating, print_offset
                 if done_generating:
                     return
-                buffer.append(tokenizer.decode([period_id] + x.tolist())[1:])
+                all_tokens.append(x.item())
+                
                 if x.item() == tokenizer.eos_id():
                     done_generating = True
-                if len(buffer) == 4 or done_generating:
-                    print(''.join(buffer), end='', flush=True)
-                    buffer.clear()
-                # print(, end='', flush=True)
+                
+                if len(all_tokens) - print_offset >= 8 or done_generating:
+                    try:
+                        decoded_text = tokenizer.decode(all_tokens)
+                        new_text = decoded_text[print_offset:]
+                        if new_text:
+                            print(new_text, end='', flush=True)
+                            print_offset = len(decoded_text)
+                    except Exception:
+                        pass
         else:
             callback = lambda x : x
         t0 = time.perf_counter()
